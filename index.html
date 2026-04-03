@@ -6,56 +6,117 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box;font-family:Arial}
         body{background:#f5f7fa;display:flex;justify-content:center;align-items:center;height:100vh}
-        .login-box{width:400px;background:white;padding:40px;border-radius:12px;box-shadow:0 0 20px #00000010}
+        .login-box{width:420px;background:white;padding:40px;border-radius:12px;box-shadow:0 0 20px #00000010}
         .login-box h2{text-align:center;margin-bottom:30px;color:#333}
         .form-item{margin-bottom:20px}
         .form-item label{display:block;margin-bottom:8px;font-weight:bold}
         .form-item input{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px}
         .login-btn{width:100%;padding:14px;background:#007bff;color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer;margin-top:10px}
         .login-btn:hover{background:#0056b3}
+        .sec-btn{width:100%;padding:12px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:14px;cursor:pointer;margin-top:8px}
         .error{color:red;text-align:center;margin-top:15px;display:none}
+        .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999}
+        .modal-body{width:380px;background:white;margin:150px auto;padding:30px;border-radius:10px}
     </style>
 </head>
 <body>
-    <div class="login-box">
-        <h2>财务对账系统</h2>
-        <div class="form-item">
-            <label>用户名</label>
-            <input type="text" id="username" placeholder="请输入用户名">
-        </div>
-        <div class="form-item">
-            <label>密码</label>
-            <input type="password" id="password" placeholder="请输入密码">
-        </div>
-        <button class="login-btn" onclick="login()">登录</button>
-        <div class="error" id="err">用户名或密码错误</div>
+<div class="login-box">
+    <h2>财务对账系统</h2>
+    <div class="form-item">
+        <label>用户名</label>
+        <input type="text" id="username" placeholder="请输入用户名">
     </div>
+    <div class="form-item">
+        <label>密码</label>
+        <input type="password" id="password" placeholder="请输入密码">
+    </div>
+    <button class="login-btn" onclick="login()">登录</button>
+    <button class="sec-btn" onclick="showChangePwd()">修改密码</button>
+    <div class="error" id="err"></div>
+</div>
 
-    <script>
-        // 前端本地验证登录（GitHub Pages 纯前端可用）
-        function login() {
-            let username = document.getElementById('username').value.trim();
-            let password = document.getElementById('password').value.trim();
+<div id="changePwdModal" class="modal">
+    <div class="modal-body">
+        <h3>修改密码</h3>
+        <div class="form-item">
+            <label>用户名</label><input type="text" id="cpUser">
+        </div>
+        <div class="form-item">
+            <label>旧密码</label><input type="password" id="cpOld">
+        </div>
+        <div class="form-item">
+            <label>新密码</label><input type="password" id="cpNew">
+        </div>
+        <button onclick="doChangePwd()" class="login-btn">保存</button>
+        <button onclick="hideChangePwd()" class="sec-btn">取消</button>
+    </div>
+</div>
 
-            if (!username || !password) {
-                document.getElementById('err').innerText = '请输入账号密码';
-                document.getElementById('err').style.display = 'block';
-                return;
-            }
+<script>
+const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
+const USER_BIN_ID = "660c12adacd37b35deabc123";
 
-            // 固定账号密码
-            const validUsers = {
-                "admin": "admin123",
-                "simon": "simon123"
-            };
+async function getUsers() {
+    try {
+        let res = await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`, {
+            headers: { "X-Access-Key": API_KEY }
+        });
+        let data = await res.json();
+        return data.record || {"admin":"admin123","simon":"simon123"};
+    } catch (e) {
+        return {"admin":"admin123","simon":"simon123"};
+    }
+}
 
-            if (validUsers[username] && validUsers[username] === password) {
-                localStorage.setItem("user", username);
-                location.href = "system.html";
-            } else {
-                document.getElementById('err').innerText = "用户名或密码错误";
-                document.getElementById('err').style.display = "block";
-            }
-        }
-    </script>
+async function saveUsers(users) {
+    await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Access-Key": API_KEY
+        },
+        body: JSON.stringify(users)
+    });
+}
+
+async function login() {
+    let u = document.getElementById('username').value.trim();
+    let p = document.getElementById('password').value.trim();
+    let users = await getUsers();
+
+    if (!u || !p) {
+        document.getElementById('err').innerText = "请输入账号密码";
+        document.getElementById('err').style.display = "block";
+        return;
+    }
+
+    if (users[u] && users[u] === p) {
+        localStorage.setItem("user", u);
+        location.href = "system.html";
+    } else {
+        document.getElementById('err').innerText = "用户名或密码错误";
+        document.getElementById('err').style.display = "block";
+    }
+}
+
+function showChangePwd() { document.getElementById('changePwdModal').style.display = "block"; }
+function hideChangePwd() { document.getElementById('changePwdModal').style.display = "none"; }
+
+async function doChangePwd() {
+    let u = document.getElementById('cpUser').value.trim();
+    let old = document.getElementById('cpOld').value;
+    let nw = document.getElementById('cpNew').value;
+    let users = await getUsers();
+
+    if (users[u] && users[u] === old) {
+        users[u] = nw;
+        await saveUsers(users);
+        alert("修改成功");
+        hideChangePwd();
+    } else {
+        alert("用户名或旧密码错误");
+    }
+}
+</script>
 </body>
+</html>
