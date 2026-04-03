@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>财务系统登录</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:Arial}
+        body{background:#f5f7fa;display:flex;justify-content:center;align-items:center;height:100vh}
+        .login-box{width:400px;background:white;padding:40px;border-radius:12px;box-shadow:0 0 20px #00000010}
+        .login-box h2{text-align:center;margin-bottom:30px;color:#333}
+        .form-item{margin-bottom:20px}
+        .form-item label{display:block;margin-bottom:8px;font-weight:bold}
+        .form-item input{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:16px}
+        .login-btn{width:100%;padding:14px;background:#007bff;color:white;border:none;border-radius:6px;font-size:16px;cursor:pointer;margin-top:10px}
+        .login-btn:hover{background:#0056b3}
+        .error{color:red;text-align:center;margin-top:15px;display:none}
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>财务对账系统</h2>
+        <div class="form-item">
+            <label>用户名</label>
+            <input type="text" id="username" placeholder="请输入用户名">
+        </div>
+        <div class="form-item">
+            <label>密码</label>
+            <input type="password" id="password" placeholder="请输入密码">
+        </div>
+        <button class="login-btn" onclick="login()">登录</button>
+        <div class="error" id="err">用户名或密码错误</div>
+    </div>
+
+    <script>
+        // API 登录结构（可对接后端）
+        async function login() {
+            let username = document.getElementById('username').value.trim();
+            let password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                document.getElementById('err').innerText = '请输入账号密码';
+                document.getElementById('err').style.display = 'block';
+                return;
+            }
+
+            // 模拟 API 请求
+            let res = await fetch("/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+
+            let result = await res.json();
+
+            if (result.code === 0) {
+                localStorage.setItem("token", result.token);
+                localStorage.setItem("user", username);
+                location.href = "system.html";
+            } else {
+                document.getElementById('err').innerText = "用户名或密码错误";
+                document.getElementById('err').style.display = "block";
+            }
+        }
+
+        // 本地演示默认账号（上线可删除）
+        window.onload = () => {
+            document.getElementById('username').value = "admin";
+            document.getElementById('password').value = "admin123";
+        };
+    </script>
+</body>
+</html>
