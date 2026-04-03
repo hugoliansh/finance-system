@@ -32,8 +32,8 @@
     </div>
 
     <script>
-        // API 登录结构（可对接后端）
-        async function login() {
+        // 前端本地验证登录（GitHub Pages 纯前端可用）
+        function login() {
             let username = document.getElementById('username').value.trim();
             let password = document.getElementById('password').value.trim();
 
@@ -43,17 +43,13 @@
                 return;
             }
 
-            // 模拟 API 请求
-            let res = await fetch("/api/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, password })
-            });
+            // 固定账号密码
+            const validUsers = {
+                "admin": "admin123",
+                "simon": "simon123"
+            };
 
-            let result = await res.json();
-
-            if (result.code === 0) {
-                localStorage.setItem("token", result.token);
+            if (validUsers[username] && validUsers[username] === password) {
                 localStorage.setItem("user", username);
                 location.href = "system.html";
             } else {
@@ -61,12 +57,5 @@
                 document.getElementById('err').style.display = "block";
             }
         }
-
-        // 本地演示默认账号（上线可删除）
-        window.onload = () => {
-            document.getElementById('username').value = "admin";
-            document.getElementById('password').value = "admin123";
-        };
     </script>
 </body>
-</html>
