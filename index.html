@@ -54,7 +54,7 @@
 
 <script>
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
-const USER_BIN_ID = "660c12adacd37b35deabc123";
+const USER_BIN_ID = "69cfc20e856a682189f79bb9"; // 你真实的用户bin
 
 async function getUsers() {
     try {
@@ -62,21 +62,26 @@ async function getUsers() {
             headers: { "X-Access-Key": API_KEY }
         });
         let data = await res.json();
-        return data.record || {"admin":"admin123","simon":"simon123"};
-    } catch (e) {
-        return {"admin":"admin123","simon":"simon123"};
+        return data.record || {"admin":"admin123"};
+    } catch(e) {
+        console.error("获取用户失败", e);
+        return {"admin":"admin123"};
     }
 }
 
 async function saveUsers(users) {
-    await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Access-Key": API_KEY
-        },
-        body: JSON.stringify(users)
-    });
+    try {
+        await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Access-Key": API_KEY
+            },
+            body: JSON.stringify(users)
+        });
+    } catch(e) {
+        alert("保存用户失败：" + e.message);
+    }
 }
 
 async function login() {
@@ -99,8 +104,12 @@ async function login() {
     }
 }
 
-function showChangePwd() { document.getElementById('changePwdModal').style.display = "block"; }
-function hideChangePwd() { document.getElementById('changePwdModal').style.display = "none"; }
+function showChangePwd() {
+    document.getElementById('changePwdModal').style.display = "block";
+}
+function hideChangePwd() {
+    document.getElementById('changePwdModal').style.display = "none";
+}
 
 async function doChangePwd() {
     let u = document.getElementById('cpUser').value.trim();
