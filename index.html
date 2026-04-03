@@ -54,21 +54,29 @@
 
 <script>
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
-const USER_BIN_ID = "69cfc20e856a682189f79bb9"; // 你真实的用户bin
+const USER_BIN_ID = "69cfc20e856a682189f79bb9";
+const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 
+// 读用户数据（先公开读，再 fallback 带 Key 读）
 async function getUsers() {
     try {
-        let res = await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`, {
-            headers: { "X-Access-Key": API_KEY }
-        });
+        // 尝试公开读（无 Key）
+        let res = await fetch(USER_BIN_URL);
+        if (res.ok) {
+            let data = await res.json();
+            return data.record || { admin: "admin123" };
+        }
+        // 公开读失败，用 Key 再试
+        res = await fetch(USER_BIN_URL, { headers: { "X-Access-Key": API_KEY } });
         let data = await res.json();
-        return data.record || {"admin":"admin123"};
-    } catch(e) {
+        return data.record || { admin: "admin123" };
+    } catch (e) {
         console.error("获取用户失败", e);
-        return {"admin":"admin123"};
+        return { admin: "admin123" };
     }
 }
 
+// 写用户数据（必须带 Key）
 async function saveUsers(users) {
     try {
         await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
@@ -79,8 +87,10 @@ async function saveUsers(users) {
             },
             body: JSON.stringify(users)
         });
-    } catch(e) {
+        return true;
+    } catch (e) {
         alert("保存用户失败：" + e.message);
+        return false;
     }
 }
 
@@ -104,12 +114,8 @@ async function login() {
     }
 }
 
-function showChangePwd() {
-    document.getElementById('changePwdModal').style.display = "block";
-}
-function hideChangePwd() {
-    document.getElementById('changePwdModal').style.display = "none";
-}
+function showChangePwd() { document.getElementById('changePwdModal').style.display = "block"; }
+function hideChangePwd() { document.getElementById('changePwdModal').style.display = "none"; }
 
 async function doChangePwd() {
     let u = document.getElementById('cpUser').value.trim();
@@ -119,9 +125,11 @@ async function doChangePwd() {
 
     if (users[u] && users[u] === old) {
         users[u] = nw;
-        await saveUsers(users);
-        alert("修改成功");
-        hideChangePwd();
+        let ok = await saveUsers(users);
+        if (ok) {
+            alert("修改成功");
+            hideChangePwd();
+        }
     } else {
         alert("用户名或旧密码错误");
     }
