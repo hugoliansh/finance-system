@@ -12,7 +12,7 @@
         .form-group{margin:15px 0}
         label{display:inline-block;width:120px;font-weight:bold}
         input,select{padding:8px;width:220px;border:1px solid #ddd;border-radius:4px}
-        button{padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor-pointer;margin-right:5px}
+        button{padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:5px}
         button:hover{background:#0056b3}
         table{width:100%;border-collapse:collapse;margin-top:20px}
         th,td{padding:10px;border:1px solid #ddd;text-align:left}
@@ -148,13 +148,23 @@
         };
 
         window.onload = () => {
-            if(!currentUser){location.href='index.html';return;}
+            if(!currentUser){
+                location.href='index.html';
+                return;
+            }
             document.getElementById('userName').innerText = currentUser;
-            if(currentUser==='admin') document.getElementById('opTimeHeader').style.display='table-cell';
+            if(currentUser==='admin'){
+                document.getElementById('opTimeHeader').style.display='table-cell';
+            }
+            document.getElementById('addBtn').disabled = false;
             refreshAll();
         };
 
-        function logout(){localStorage.clear();location.href='index.html';}
+        function logout(){
+            localStorage.clear();
+            location.href='index.html';
+        }
+
         function refreshForm(){
             let type=document.getElementById('recordType').value;
             let main=document.getElementById('expenseMain')?.value||'';
@@ -163,6 +173,7 @@
             document.getElementById('toChannelGroup').style.display=type==='转账'?'block':'none';
             if(type==='支出')refreshSubCategory();
         }
+
         function refreshSubCategory(){
             let main=document.getElementById('expenseMain').value;
             let sub=document.getElementById('expenseSub');sub.innerHTML='';
@@ -171,6 +182,7 @@
                 let opt=document.createElement('option');opt.value=s;opt.innerText=s;sub.appendChild(opt);
             });
         }
+
         function showEditInitial(){
             let v=prompt("修改初始投入",initialCapital);
             if(v===null)return;
@@ -178,8 +190,11 @@
             localStorage.setItem('initialCapital',initialCapital);
             refreshAll();
         }
+
         function refreshAll(){renderPage();updateProgress();}
+
         function isDividendRecord(r){return r.remark&&r.remark.includes("分红");}
+
         function updateProgress(){
             let profit=0;
             records.forEach(r=>{
@@ -190,6 +205,7 @@
             document.getElementById('capitalProgress').innerText=
                 `初始投入：${initialCapital.toFixed(2)} 元 | 累计经营利润：${profit.toFixed(2)} 元 | 回本进度：${pct.toFixed(1)}%`;
         }
+
         function addRecord(){
             if(!currentUser){alert('请先登录');return;}
             let date=document.getElementById('payDate').value;
@@ -213,6 +229,7 @@
             records.unshift(r);localStorage.setItem('financeRecords',JSON.stringify(records));
             refreshAll();alert('保存成功');
         }
+
         function renderPage(){
             let totalPage=Math.ceil(records.length/pageSize);
             let start=(currentPage-1)*pageSize;
@@ -222,6 +239,7 @@
             if(currentPage>1){let b=document.createElement('button');b.className='page-btn';b.innerText='上一页';b.onclick=()=>{currentPage--;renderPage();};nav.appendChild(b);}
             if(currentPage<totalPage){let b=document.createElement('button');b.className='page-btn';b.innerText='下一页';b.onclick=()=>{currentPage++;renderPage();};nav.appendChild(b);}
         }
+
         function renderList(data){
             let b=document.getElementById('recordBody');b.innerHTML='';
             data.forEach(r=>{
@@ -229,6 +247,7 @@
                 b.innerHTML+=`<tr><td>${r.date}</td><td>${r.type}</td><td>${r.category||'-'}</td><td>${r.channel}</td><td>${r.toChannel||'-'}</td><td>${r.amount.toFixed(2)}</td><td>${r.operator}</td>${op}<td>${r.remark}</td></tr>`;
             });
         }
+
         function queryDaily(){
             let d=document.getElementById('queryDate').value;
             if(!d){alert('请选择日期');return;}
@@ -237,6 +256,7 @@
             list.forEach(r=>{if(r.type==='转账'||isDividendRecord(r))return;r.type==='收入'?income+=r.amount:expense+=r.amount;});
             document.getElementById('summaryResult').innerText=`${d} 当日对账汇总\n收入：${income.toFixed(2)}\n支出：${expense.toFixed(2)}\n净额：${(income-expense).toFixed(2)}`;
         }
+
         function queryBalance(){
             let d=document.getElementById('queryDate').value;
             if(!d){alert('请选择日期');return;}
@@ -250,6 +270,7 @@
             let total=bal.支付宝+bal.微信+bal.兴业银行+bal.公司账户;
             document.getElementById('summaryResult').innerText=`截至 ${d}\n支付宝：${bal.支付宝.toFixed(2)}\n微信：${bal.微信.toFixed(2)}\n兴业银行：${bal.兴业银行.toFixed(2)}\n公司账户：${bal.公司账户.toFixed(2)}\n————————————\n总余额：${total.toFixed(2)}`;
         }
+
         function showMonthDetail(){
             let m=document.getElementById('monthQuery').value;
             if(!m){alert('请选择月份');return;}
@@ -265,6 +286,7 @@
             document.getElementById('reportTitle').innerText=m+"月度明细";
             document.getElementById('reportModal').style.display="block";
         }
+
         function genYearReport(){
             let y=document.getElementById('yearInput').value;
             if(!y){alert('请输入年份');return;}
@@ -280,7 +302,9 @@
             document.getElementById('reportTitle').innerText=y+"年度财报";
             document.getElementById('reportModal').style.display="block";
         }
+
         function closeReport(){document.getElementById('reportModal').style.display="none";}
+
         function exportRangeRecords(){
             let s=document.getElementById('exportStart').value;
             let e=document.getElementById('exportEnd').value;
@@ -299,6 +323,7 @@
             XLSX.utils.book_append_sheet(wb,ws,"流水");
             XLSX.writeFile(wb,`流水_${s}_${e}.xlsx`);
         }
+
         function exportCurrentReport(){}
     </script>
 </body>
