@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 body{font-family:Arial;margin:20px;background:#f5f7fa}
-.container{max-width:1300px;margin:0 auto;background:white;padding:20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,0.1)}
+.container{max-width:1300px;margin:0 auto;background:white;padding:20px;border-radius:8px;box-shadow:0 0 20px rgba(0,0,0,0.1)}
 h1,h2,h3{color:#333}
 .form-group{margin:15px 0}
 label{display:inline-block;width:120px;font-weight:bold}
@@ -18,10 +18,8 @@ table{width:100%;border-collapse:collapse;margin-top:20px}
 th,td{padding:10px;border:1px solid #ddd;text-align:left}
 th{background:#f8f9fa}
 .summary{background:#e9f7ef;padding:15px;border-radius:4px;margin:20px 0;white-space:pre-line}
-.top-report{position:absolute;top:20px;right:20px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.page-btn{margin:10px 5px;padding:6px 12px}
-.bottom-bar{margin-top:40px;padding-top:20px;border-top:1px solid #ddd}
-.user-info{text-align:right;margin-bottom:10px}
+.top-report{position:absolute;top:80px;right:20px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.user-info{text-align:right;margin-bottom:60px}
 .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999}
 .modal-body{width:400px;background:white;margin:120px auto;padding:30px;border-radius:10px}
 </style>
@@ -33,33 +31,6 @@ th{background:#f8f9fa}
     <button id="addUserBtn" style="display:none;background:#28a745" onclick="showAddUser()">新增用户</button>
     <button id="importBtn" style="display:none;background:#17a2b8" onclick="document.getElementById('importFile').click()">导入Excel</button>
     <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls" onchange="importExcel(event)">
-</div>
-
-<div id="reportModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;">
-    <div style="background:white;margin:5% auto;padding:20px;width:80%;max-width:1000px;border-radius:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <h2 id="reportTitle"></h2>
-            <div>
-                <button onclick="exportCurrentReport()">导出Excel</button>
-                <button onclick="closeReport()">关闭</button>
-            </div>
-        </div>
-        <div id="reportContent" style="max-height:600px;overflow:auto;"></div>
-    </div>
-</div>
-
-<div id="addUserModal" class="modal">
-    <div class="modal-body">
-        <h3>新增用户</h3>
-        <div class="form-item">
-            <label>用户名</label><input type="text" id="newUser">
-        </div>
-        <div class="form-item">
-            <label>密码</label><input type="password" id="newPwd">
-        </div>
-        <button onclick="doAddUser()" class="login-btn">保存</button>
-        <button onclick="hideAddUser()" class="sec-btn">取消</button>
-    </div>
 </div>
 
 <div class="top-report">
@@ -77,9 +48,35 @@ th{background:#f8f9fa}
     </div>
 </div>
 
+<div id="reportModal" class="modal">
+    <div style="background:white;margin:5% auto;padding:20px;width:80%;max-width:1000px;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <h2 id="reportTitle"></h2>
+            <div>
+                <button onclick="closeReport()">关闭</button>
+            </div>
+        </div>
+        <div id="reportContent" style="max-height:600px;overflow:auto;"></div>
+    </div>
+</div>
+
+<div id="addUserModal" class="modal">
+    <div class="modal-body">
+        <h3>新增用户</h3>
+        <div class="form-group">
+            <label>用户名</label><input type="text" id="newUser">
+        </div>
+        <div class="form-group">
+            <label>密码</label><input type="password" id="newPwd">
+        </div>
+        <button onclick="doAddUser()" class="login-btn">保存</button>
+        <button onclick="hideAddUser()" class="sec-btn">取消</button>
+    </div>
+</div>
+
 <div class="container">
     <h1>财务对账系统</h1>
-    <div class="summary" id="capitalProgress" style="font-size:16px;"></div>
+    <div class="summary" id="capitalProgress"></div>
 
     <h2>数据录入</h2>
     <div class="form-group"><label>日期：</label><input type="date" id="payDate" required></div>
@@ -117,7 +114,7 @@ th{background:#f8f9fa}
     </div>
     <div class="form-group"><label>金额：</label><input type="number" id="amount" step="0.01" required></div>
     <div class="form-group"><label>备注：</label><input type="text" id="remark" placeholder=""></div>
-    <button id="addBtn" onclick="addRecord()" disabled>保存</button>
+    <button onclick="addRecord()">保存</button>
 
     <h2>查询对账</h2>
     <div class="form-group">
@@ -128,7 +125,6 @@ th{background:#f8f9fa}
     <div class="summary" id="summaryResult"></div>
 
     <h2>流水记录</h2>
-    <div id="pageNav"></div>
     <table>
         <thead>
             <tr>
@@ -139,26 +135,26 @@ th{background:#f8f9fa}
         <tbody id="recordBody"></tbody>
     </table>
 
-    <div class="bottom-bar">
+    <div class="bottom-bar" style="margin-top:20px;padding-top:20px;border-top:1px solid #ddd">
         <div class="form-group">
             <label>导出区间：</label>
             <input type="date" id="exportStart"> ~ <input type="date" id="exportEnd">
-            <button onclick="exportRangeRecords()" style="background:#17a2b8;">导出流水Excel</button>
+            <button onclick="exportRangeRecords()" style="background:#17a2b8">导出流水Excel</button>
         </div>
-        <button onclick="showEditInitial()" style="background:#28a745;">修改初始投入</button>
+        <button onclick="showEditInitial()" style="background:#28a745">修改初始投入</button>
     </div>
 </div>
 
 <script>
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
-const DATA_BIN_ID = "69cfc228aaba882197bfcaa0";  // 你真实的数据bin
-const USER_BIN_ID = "69cfc20e856a682189f79bb9"; // 你真实的用户bin
+const DATA_BIN_ID = "69cf5a1d36566621a875742d";
+const USER_BIN_ID = "69cfc20e856a682189f79bb9";
+const DATA_BIN_URL = `https://api.jsonbin.io/v3/b/${DATA_BIN_ID}/latest`;
+const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 
 let currentUser = localStorage.getItem("user");
 let records = [];
 let initialCapital = 0;
-let pageSize = 20;
-let currentPage = 1;
 
 const expenseCategories = {
     "人事支出":["薪资-基本薪酬","薪资-业绩奖励","团建","培训","招聘"],
@@ -170,21 +166,24 @@ const expenseCategories = {
     "预付款":["场地预付","广告预付"]
 };
 
-// 加载云端数据
+// 读数据（先公开读，再 fallback 带 Key 读）
 async function loadData() {
     try {
-        let res = await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}/latest`, {
-            headers: { "X-Access-Key": API_KEY }
-        });
+        let res = await fetch(DATA_BIN_URL);
+        if (res.ok) {
+            let data = await res.json();
+            return data.record || { records: [], initialCapital: 0 };
+        }
+        res = await fetch(DATA_BIN_URL, { headers: { "X-Access-Key": API_KEY } });
         let data = await res.json();
         return data.record || { records: [], initialCapital: 0 };
-    } catch(e) {
+    } catch (e) {
         console.error("加载数据失败", e);
         return { records: [], initialCapital: 0 };
     }
 }
 
-// 保存云端数据
+// 写数据（必须带 Key）
 async function saveData(data) {
     try {
         await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
@@ -195,25 +194,30 @@ async function saveData(data) {
             },
             body: JSON.stringify(data)
         });
-    } catch(e) {
-        alert("保存失败：" + e.message);
+        return true;
+    } catch (e) {
+        alert("保存数据失败：" + e.message);
+        return false;
     }
 }
 
-// 用户管理
+// 读用户
 async function getUsers() {
     try {
-        let res = await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`, {
-            headers: { "X-Access-Key": API_KEY }
-        });
+        let res = await fetch(USER_BIN_URL);
+        if (res.ok) {
+            let data = await res.json();
+            return data.record || { admin: "admin123" };
+        }
+        res = await fetch(USER_BIN_URL, { headers: { "X-Access-Key": API_KEY } });
         let data = await res.json();
-        return data.record || { "admin": "admin123" };
-    } catch(e) {
-        console.error("获取用户失败", e);
-        return { "admin": "admin123" };
+        return data.record || { admin: "admin123" };
+    } catch (e) {
+        return { admin: "admin123" };
     }
 }
 
+// 写用户
 async function saveUsers(users) {
     try {
         await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
@@ -224,109 +228,100 @@ async function saveUsers(users) {
             },
             body: JSON.stringify(users)
         });
-    } catch(e) {
-        alert("保存用户失败：" + e.message);
+        return true;
+    } catch (e) {
+        alert("保存用户失败");
+        return false;
     }
 }
 
+// 初始化
 window.onload = async () => {
-    if (!currentUser) { location.href = 'index.html'; return; }
-    document.getElementById('userName').innerText = currentUser;
+    if (!currentUser) { location.href = "index.html"; return; }
+    document.getElementById("userName").innerText = currentUser;
 
-    // ✅ 关键修复：admin 必显示按钮
-    if (currentUser === 'admin') {
-        document.getElementById('opTimeHeader').style.display = 'table-cell';
-        document.getElementById('addUserBtn').style.display = 'inline-block';
-        document.getElementById('importBtn').style.display = 'inline-block';
+    // admin 显示按钮
+    if (currentUser === "admin") {
+        document.getElementById("opTimeHeader").style.display = "table-cell";
+        document.getElementById("addUserBtn").style.display = "inline-block";
+        document.getElementById("importBtn").style.display = "inline-block";
     }
-    document.getElementById('addBtn').disabled = false;
 
-    // 加载数据
-    let cloudData = await loadData();
-    records = cloudData.records || [];
-    initialCapital = cloudData.initialCapital || 0;
+    // 加载云端数据
+    const cloud = await loadData();
+    records = cloud.records || [];
+    initialCapital = cloud.initialCapital || 0;
     refreshAll();
 };
 
 function logout() {
     localStorage.clear();
-    location.href = 'index.html';
+    location.href = "index.html";
 }
 
-// 归属月份：仅人事/场地/预付款显示
 function refreshForm() {
-    let type = document.getElementById('recordType').value;
-    let main = document.getElementById('expenseMain')?.value || '';
-    document.getElementById('expenseTypeGroup').style.display = type === '支出' ? 'block' : 'none';
-    document.getElementById('toChannelGroup').style.display = type === '转账' ? 'block' : 'none';
+    const type = document.getElementById("recordType").value;
+    const main = document.getElementById("expenseMain")?.value;
+    document.getElementById("expenseTypeGroup").style.display = type === "支出" ? "block" : "none";
+    document.getElementById("toChannelGroup").style.display = type === "转账" ? "block" : "none";
 
-    let showBelong = (type === '支出' && 
-        (main === '人事支出' || main === '场地支出' || main === '预付款'));
-    document.getElementById('belongMonthGroup').style.display = showBelong ? 'block' : 'none';
-    if (type === '支出') refreshSubCategory();
+    // 只有这三类显示归属月份
+    const showBelong = type === "支出" && ["人事支出","场地支出","预付款"].includes(main);
+    document.getElementById("belongMonthGroup").style.display = showBelong ? "block" : "none";
+    if (type === "支出") refreshSubCategory();
 }
 
 function refreshSubCategory() {
-    let main = document.getElementById('expenseMain').value;
-    let sub = document.getElementById('expenseSub');
-    sub.innerHTML = '';
-    if (!expenseCategories[main]) return;
-    expenseCategories[main].forEach(s => {
-        let opt = document.createElement('option');
+    const main = document.getElementById("expenseMain").value;
+    const sub = document.getElementById("expenseSub");
+    sub.innerHTML = "";
+    (expenseCategories[main] || []).forEach(s => {
+        const opt = document.createElement("option");
         opt.value = s; opt.innerText = s;
         sub.appendChild(opt);
     });
 }
 
 async function showEditInitial() {
-    let v = prompt("修改初始投入", initialCapital);
-    if (v === null) return;
-    initialCapital = parseFloat(v) || 0;
+    const v = prompt("初始投入", initialCapital);
+    if (v == null) return;
+    initialCapital = Number(v) || 0;
     await saveData({ records, initialCapital });
     refreshAll();
 }
 
-function refreshAll() { renderPage(); updateProgress(); }
-
-function isDividendRecord(r) {
-    return r.remark && r.remark.includes("分红");
+function refreshAll() {
+    renderList();
+    updateProgress();
 }
 
 function updateProgress() {
     let profit = 0;
     records.forEach(r => {
-        if (r.type === '转账') return;
-        if (isDividendRecord(r)) return;
-        let real = r.type === '收入' ? r.amount : -r.amount;
-        profit += real;
+        if (r.type === "转账") return;
+        if (r.remark?.includes("分红")) return;
+        profit += r.type === "收入" ? r.amount : -r.amount;
     });
-    let pct = initialCapital > 0 ? Math.min(100, Math.max(0, (profit / initialCapital * 100))) : 0;
-    document.getElementById('capitalProgress').innerText =
-        `初始投入：${initialCapital.toFixed(2)} 元 | 累计经营利润：${profit.toFixed(2)} 元 | 回本进度：${pct.toFixed(1)}%`;
+    document.getElementById("capitalProgress").innerText =
+        `初始：${initialCapital.toFixed(2)} | 利润：${profit.toFixed(2)}`;
 }
 
 async function addRecord() {
-    if (!currentUser) { alert('请先登录'); return; }
-    let date = document.getElementById('payDate').value;
-    let type = document.getElementById('recordType').value;
-    let amount = document.getElementById('amount').value;
-    if (!date) { alert('请选择日期！'); return; }
-    if (!amount || amount <= 0) { alert('请输入正确金额！'); return; }
-    if (type === '支出' && !document.getElementById('expenseSub').value) {
-        alert('支出必须选择大类+小类！'); return;
-    }
+    const date = document.getElementById("payDate").value;
+    const type = document.getElementById("recordType").value;
+    const amount = Number(document.getElementById("amount").value);
+    if (!date || !amount) { alert("请填完整"); return; }
 
-    let main = document.getElementById('expenseMain')?.value || '';
-    let sub = document.getElementById('expenseSub')?.value || '';
-    let category = type === '支出' ? `${main}-${sub}` : '';
-
-    let r = {
-        date: date, type: type, category: category,
-        belongMonth: document.getElementById('belongMonth').value || '',
-        channel: document.getElementById('channel').value,
-        toChannel: document.getElementById('toChannel')?.value || '',
-        amount: parseFloat(amount) || 0,
-        remark: document.getElementById('remark').value,
+    const main = document.getElementById("expenseMain")?.value;
+    const sub = document.getElementById("expenseSub")?.value;
+    const r = {
+        date, type,
+        category: type === "支出" ? `${main}-${sub}` : "",
+        belongMonth: document.getElementById("belongMonth").value || "",
+        channel: document.getElementById("channel").value,
+        toChannel: document.getElementById("toChannel")?.value || "",
+        amount,
+        remark: document.getElementById("remark").value,
         operator: currentUser,
         operateTime: new Date().toLocaleString()
     };
@@ -334,203 +329,168 @@ async function addRecord() {
     records.unshift(r);
     await saveData({ records, initialCapital });
     refreshAll();
-    alert('保存成功');
+    alert("保存成功");
 }
 
-function renderPage() {
-    let totalPage = Math.ceil(records.length / pageSize);
-    let start = (currentPage - 1) * pageSize;
-    let data = records.slice(start, start + pageSize);
-    renderList(data);
-    let nav = document.getElementById('pageNav');
-    nav.innerHTML = '';
-    if (currentPage > 1) {
-        let b = document.createElement('button');
-        b.className = 'page-btn'; b.innerText = '上一页';
-        b.onclick = () => { currentPage--; renderPage(); };
-        nav.appendChild(b);
-    }
-    if (currentPage < totalPage) {
-        let b = document.createElement('button');
-        b.className = 'page-btn'; b.innerText = '下一页';
-        b.onclick = () => { currentPage++; renderPage(); };
-        nav.appendChild(b);
-    }
-}
-
-function renderList(data) {
-    let b = document.getElementById('recordBody');
-    b.innerHTML = '';
-    data.forEach(r => {
-        let op = currentUser === 'admin' ? `<td>${r.operateTime || '-'}</td>` : '';
+function renderList() {
+    const b = document.getElementById("recordBody");
+    b.innerHTML = "";
+    records.forEach(r => {
+        const op = currentUser === "admin" ? `<td>${r.operateTime}</td>` : "";
         b.innerHTML += `<tr>
-<td>${r.date}</td><td>${r.type}</td><td>${r.category || '-'}</td><td>${r.channel}</td><td>${r.toChannel || '-'}</td>
-<td>${r.amount.toFixed(2)}</td><td>${r.operator}</td>${op}<td>${r.remark}</td></tr>`;
+<td>${r.date}</td><td>${r.type}</td><td>${r.category||"-"}</td>
+<td>${r.channel}</td><td>${r.toChannel||"-"}</td><td>${r.amount.toFixed(2)}</td>
+<td>${r.operator}</td>${op}<td>${r.remark}</td></tr>`;
     });
 }
 
 function queryDaily() {
-    let d = document.getElementById('queryDate').value;
-    if (!d) { alert('请选择日期'); return; }
-    let list = records.filter(x => x.date === d);
-    let income = 0, expense = 0;
+    const d = document.getElementById("queryDate").value;
+    const list = records.filter(x => x.date === d);
+    let inSum = 0, outSum = 0;
     list.forEach(r => {
-        if (r.type === '转账' || isDividendRecord(r)) return;
-        r.type === '收入' ? income += r.amount : expense += r.amount;
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
     });
-    document.getElementById('summaryResult').innerText =
-        `${d} 当日对账汇总\n收入：${income.toFixed(2)}\n支出：${expense.toFixed(2)}\n净额：${(income - expense).toFixed(2)}`;
+    document.getElementById("summaryResult").innerText =
+        `${d}\n收入：${inSum.toFixed(2)}\n支出：${outSum.toFixed(2)}\n净额：${(inSum-outSum).toFixed(2)}`;
 }
 
 function queryBalance() {
-    let d = document.getElementById('queryDate').value;
-    if (!d) { alert('请选择日期'); return; }
-    let list = records.filter(x => x.date <= d);
-    let bal = { 支付宝: 0, 微信: 0, 兴业银行: 0, 公司账户: 0 };
+    const d = document.getElementById("queryDate").value;
+    const list = records.filter(x => x.date <= d);
+    const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0};
     list.forEach(r => {
-        if (r.type === '收入') bal[r.channel] += r.amount;
-        else if (r.type === '支出') bal[r.channel] -= r.amount;
-        else if (r.type === '转账') { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
+        if (r.type === "收入") bal[r.channel] += r.amount;
+        if (r.type === "支出") bal[r.channel] -= r.amount;
+        if (r.type === "转账") { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
     });
-    let total = bal.支付宝 + bal.微信 + bal.兴业银行 + bal.公司账户;
-    document.getElementById('summaryResult').innerText =
-`截至 ${d}
+    const total = bal.支付宝+bal.微信+bal.兴业银行+bal.公司账户;
+    document.getElementById("summaryResult").innerText =
+`截至${d}
 支付宝：${bal.支付宝.toFixed(2)}
 微信：${bal.微信.toFixed(2)}
 兴业银行：${bal.兴业银行.toFixed(2)}
 公司账户：${bal.公司账户.toFixed(2)}
-————————————
-总余额：${total.toFixed(2)}`;
+合计：${total.toFixed(2)}`;
 }
 
-// 月度明细：归属月份优先
+// 月度明细：优先按归属月查询
 function showMonthDetail() {
-    let m = document.getElementById('monthQuery').value;
-    if (!m) { alert('请选择月份'); return; }
-    let list = records.filter(x => {
-        if (x.belongMonth) return x.belongMonth === m;
-        else return x.date && x.date.startsWith(m);
-    });
-    let income = 0, expense = 0;
+    const m = document.getElementById("monthQuery").value;
+    const list = records.filter(x => x.belongMonth === m || x.date.startsWith(m));
+    let inSum=0, outSum=0;
     list.forEach(r => {
-        if (isDividendRecord(r) || r.type === '转账') return;
-        let f = r.type === '收入' ? r.amount : -r.amount;
-        r.type === '收入' ? income += f : expense += Math.abs(f);
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
     });
-    let html = `<h3>${m} 月度明细</h3>
-<p>收入：${income.toFixed(2)}</p>
-<p>支出：${expense.toFixed(2)}</p>
-<p>净利：${(income - expense).toFixed(2)}</p>
-<table border=1 cellpadding=5 width=100% style="border-collapse:collapse">
-<tr bgcolor=#eee>
-<th>日期</th><th>归属月</th><th>类型</th><th>分类</th><th>渠道</th><th>金额</th><th>最终</th><th>操作人</th><th>备注</th></tr>`;
+    document.getElementById("reportContent").innerHTML =
+        `<h3>${m} 月度明细</h3>
+        <p>收入：${inSum.toFixed(2)}</p>
+        <p>支出：${outSum.toFixed(2)}</p>
+        <p>净利：${(inSum-outSum).toFixed(2)}</p>
+        <table border=1 cellpadding=5 width=100% style="border-collapse:collapse">
+            <tr bgcolor=#eee>
+                <th>日期</th><th>归属月</th><th>类型</th><th>分类</th><th>渠道</th><th>金额</th><th>操作人</th><th>备注</th>
+            </tr>`;
     list.forEach(r => {
-        let f = r.type === '收入' ? r.amount : -r.amount;
-        html += `<tr>
-<td>${r.date || '-'}</td><td>${r.belongMonth || '-'}</td><td>${r.type}</td><td>${r.category || '-'}</td>
-<td>${r.channel}</td><td>${r.amount.toFixed(2)}</td><td>${f.toFixed(2)}</td><td>${r.operator}</td><td>${r.remark || ''}</td></tr>`;
+        document.getElementById("reportContent").innerHTML +=
+            `<tr>
+                <td>${r.date}</td><td>${r.belongMonth||"-"}</td><td>${r.type}</td><td>${r.category||"-"}</td>
+                <td>${r.channel}</td><td>${r.amount.toFixed(2)}</td><td>${r.operator}</td><td>${r.remark||""}</td>
+            </tr>`;
     });
-    html += `</table>`;
-    document.getElementById('reportContent').innerHTML = html;
-    document.getElementById('reportTitle').innerText = m + "月度明细";
-    document.getElementById('reportModal').style.display = "block";
+    document.getElementById("reportContent").innerHTML += `</table>`;
+    document.getElementById("reportTitle").innerText = m + "月度明细";
+    document.getElementById("reportModal").style.display = "block";
 }
 
 function genYearReport() {
-    let y = document.getElementById('yearInput').value;
-    if (!y) { alert('请输入年份'); return; }
-    let list = records.filter(x => x.date.startsWith(y));
-    let income = 0, expense = 0;
+    const y = document.getElementById("yearInput").value;
+    const rent = Number(document.getElementById("yearRent").value)||0;
+    const list = records.filter(x => x.date.startsWith(y));
+    let inSum=0, outSum=0;
     list.forEach(r => {
-        if (r.type === '转账' || isDividendRecord(r)) return;
-        if (r.category && r.category.startsWith('场地支出')) return;
-        r.type === '收入' ? income += r.amount : expense += r.amount;
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        if (r.category?.startsWith("场地支出")) return;
+        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
     });
-    let rent = parseFloat(document.getElementById('yearRent').value) || 0;
-    document.getElementById('reportContent').innerHTML = `<h3>${y}年度财报</h3>
-<p>收入：${income.toFixed(2)}</p>
-<p>支出（不含场地）：${expense.toFixed(2)}</p>
-<p>全年租金：${rent.toFixed(2)}</p>
-<p>净利润：${(income - expense - rent).toFixed(2)}</p>`;
-    document.getElementById('reportTitle').innerText = y + "年度财报";
-    document.getElementById('reportModal').style.display = "block";
+    document.getElementById("reportContent").innerHTML =
+        `<h3>${y}年度财报</h3>
+        <p>收入：${inSum.toFixed(2)}</p>
+        <p>支出(不含场地)：${outSum.toFixed(2)}</p>
+        <p>全年租金：${rent.toFixed(2)}</p>
+        <p>净利润：${(inSum-outSum-rent).toFixed(2)}</p>`;
+    document.getElementById("reportTitle").innerText = y + "年度财报";
+    document.getElementById("reportModal").style.display = "block";
 }
 
-function closeReport() { document.getElementById('reportModal').style.display = "none"; }
+function closeReport() {
+    document.getElementById("reportModal").style.display = "none";
+}
 
 function exportRangeRecords() {
-    let s = document.getElementById('exportStart').value;
-    let e = document.getElementById('exportEnd').value;
-    if (!s || !e) { alert('请选择开始和结束日期'); return; }
-    let data = records.filter(x => x.date >= s && x.date <= e);
-    let headers = ["日期", "类型", "分类", "转出账户", "转入账户", "金额", "操作人", "备注"];
-    if (currentUser === 'admin') headers.push("操作时间");
-    let out = [headers];
-    data.forEach(r => {
-        let row = [r.date, r.type, r.category || '-', r.channel, r.toChannel || '-', r.amount.toFixed(2), r.operator, r.remark];
-        if (currentUser === 'admin') row.push(r.operateTime || '-');
-        out.push(row);
-    });
-    let ws = XLSX.utils.aoa_to_sheet(out);
-    let wb = XLSX.utils.book_new();
+    const s = document.getElementById("exportStart").value;
+    const e = document.getElementById("exportEnd").value;
+    const data = records.filter(x => x.date >= s && x.date <= e);
+    const aoa = [["日期","类型","分类","转出账户","转入账户","金额","操作人","备注"]];
+    data.forEach(r => aoa.push([r.date, r.type, r.category||"-", r.channel, r.toChannel||"-", r.amount, r.operator, r.remark]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "流水");
-    XLSX.writeFile(wb, `流水_${s}_${e}.xlsx`);
+    XLSX.writeFile(wb, `流水${s}~${e}.xlsx`);
 }
 
-// admin 新增用户
-function showAddUser() { document.getElementById('addUserModal').style.display = "block"; }
-function hideAddUser() { document.getElementById('addUserModal').style.display = "none"; }
+// 新增用户（真实可保存到云端）
+function showAddUser() { document.getElementById("addUserModal").style.display = "block"; }
+function hideAddUser() { document.getElementById("addUserModal").style.display = "none"; }
 async function doAddUser() {
-    let u = document.getElementById('newUser').value.trim();
-    let p = document.getElementById('newPwd').value.trim();
+    const u = document.getElementById("newUser").value.trim();
+    const p = document.getElementById("newPwd").value.trim();
     if (!u || !p) { alert("请输入用户名和密码"); return; }
-    let users = await getUsers();
+    const users = await getUsers();
     if (users[u]) { alert("用户已存在"); return; }
     users[u] = p;
-    await saveUsers(users);
-    alert("新增成功");
-    hideAddUser();
+    const ok = await saveUsers(users);
+    if (ok) { alert("新增成功"); hideAddUser(); }
 }
 
-// admin 导入 Excel
+// 导入Excel（真实解析并写入云端）
 async function importExcel(e) {
-    let file = e.target.files[0];
+    const file = e.target.files[0];
     if (!file) return;
-    let reader = new FileReader();
-    reader.onload = async function (ev) {
-        let data = new Uint8Array(ev.target.result);
-        let wb = XLSX.read(data, { type: 'array' });
-        let ws = wb.Sheets[wb.SheetNames[0]];
-        let json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const reader = new FileReader();
+    reader.onload = async ev => {
+        const wb = XLSX.read(ev.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
         json.shift(); // 去掉表头
-        let success = 0;
+        let count = 0;
         json.forEach(row => {
-            if (!row[0]) return;
-            let r = {
-                date: row[0] || '',
-                type: row[1] || '',
-                category: row[2] || '',
-                channel: row[3] || '',
-                toChannel: row[4] || '',
-                amount: parseFloat(row[5]) || 0,
-                operator: row[6] || currentUser,
-                remark: row[7] || '',
-                belongMonth: '',
+            if (!row[0] || !row[5]) return;
+            const r = {
+                date: row[0] + "",
+                type: row[1] || "收入",
+                category: row[2] || "",
+                channel: row[3] || "支付宝",
+                toChannel: row[4] || "",
+                amount: Number(row[5]) || 0,
+                operator: currentUser,
+                remark: row[7] || "",
+                belongMonth: "",
                 operateTime: new Date().toLocaleString()
             };
             if (r.amount <= 0) return;
             records.unshift(r);
-            success++;
+            count++;
         });
         await saveData({ records, initialCapital });
         refreshAll();
-        alert(`导入成功 ${success} 条数据`);
-        document.getElementById('importFile').value = '';
+        alert(`导入成功 ${count} 条数据`);
+        document.getElementById("importFile").value = "";
     };
     reader.readAsArrayBuffer(file);
 }
-
-function exportCurrentReport(){}
 </script>
 </body>
 </html>
