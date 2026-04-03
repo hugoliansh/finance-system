@@ -151,8 +151,8 @@ th{background:#f8f9fa}
 
 <script>
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
-const DATA_BIN_ID = "660c12bcacd37b35deabc124";
-const USER_BIN_ID = "660c12adacd37b35deabc123";
+const DATA_BIN_ID = "69cfc228aaba882197bfcaa0";  // 你真实的数据bin
+const USER_BIN_ID = "69cfc20e856a682189f79bb9"; // 你真实的用户bin
 
 let currentUser = localStorage.getItem("user");
 let records = [];
@@ -170,47 +170,70 @@ const expenseCategories = {
     "预付款":["场地预付","广告预付"]
 };
 
-// 云端读取数据
+// 加载云端数据
 async function loadData() {
-    let res = await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}/latest`, {
-        headers: { "X-Access-Key": API_KEY }
-    });
-    let data = await res.json();
-    return data.record || { records: [], initialCapital: 0 };
+    try {
+        let res = await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}/latest`, {
+            headers: { "X-Access-Key": API_KEY }
+        });
+        let data = await res.json();
+        return data.record || { records: [], initialCapital: 0 };
+    } catch(e) {
+        console.error("加载数据失败", e);
+        return { records: [], initialCapital: 0 };
+    }
 }
 
-// 云端保存数据
+// 保存云端数据
 async function saveData(data) {
-    await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "X-Access-Key": API_KEY
-        },
-        body: JSON.stringify(data)
-    });
+    try {
+        await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Access-Key": API_KEY
+            },
+            body: JSON.stringify(data)
+        });
+    } catch(e) {
+        alert("保存失败：" + e.message);
+    }
 }
 
 // 用户管理
 async function getUsers() {
-    let res = await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`, {
-        headers: { "X-Access-Key": API_KEY }
-    });
-    let data = await res.json();
-    return data.record || { "admin": "admin123", "simon": "simon123" };
+    try {
+        let res = await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`, {
+            headers: { "X-Access-Key": API_KEY }
+        });
+        let data = await res.json();
+        return data.record || { "admin": "admin123" };
+    } catch(e) {
+        console.error("获取用户失败", e);
+        return { "admin": "admin123" };
+    }
 }
 
 async function saveUsers(users) {
-    await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Access-Key": API_KEY },
-        body: JSON.stringify(users)
-    });
+    try {
+        await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Access-Key": API_KEY
+            },
+            body: JSON.stringify(users)
+        });
+    } catch(e) {
+        alert("保存用户失败：" + e.message);
+    }
 }
 
 window.onload = async () => {
     if (!currentUser) { location.href = 'index.html'; return; }
     document.getElementById('userName').innerText = currentUser;
+
+    // ✅ 关键修复：admin 必显示按钮
     if (currentUser === 'admin') {
         document.getElementById('opTimeHeader').style.display = 'table-cell';
         document.getElementById('addUserBtn').style.display = 'inline-block';
@@ -218,7 +241,7 @@ window.onload = async () => {
     }
     document.getElementById('addBtn').disabled = false;
 
-    // 加载云端数据
+    // 加载数据
     let cloudData = await loadData();
     records = cloudData.records || [];
     initialCapital = cloudData.initialCapital || 0;
@@ -230,17 +253,15 @@ function logout() {
     location.href = 'index.html';
 }
 
-// 归属月份显示规则：人事支出 / 场地支出 / 预付款
+// 归属月份：仅人事/场地/预付款显示
 function refreshForm() {
     let type = document.getElementById('recordType').value;
     let main = document.getElementById('expenseMain')?.value || '';
     document.getElementById('expenseTypeGroup').style.display = type === '支出' ? 'block' : 'none';
     document.getElementById('toChannelGroup').style.display = type === '转账' ? 'block' : 'none';
 
-    let showBelong = false;
-    if (type === '支出' && (main === '人事支出' || main === '场地支出' || main === '预付款')) {
-        showBelong = true;
-    }
+    let showBelong = (type === '支出' && 
+        (main === '人事支出' || main === '场地支出' || main === '预付款'));
     document.getElementById('belongMonthGroup').style.display = showBelong ? 'block' : 'none';
     if (type === '支出') refreshSubCategory();
 }
@@ -267,7 +288,9 @@ async function showEditInitial() {
 
 function refreshAll() { renderPage(); updateProgress(); }
 
-function isDividendRecord(r) { return r.remark && r.remark.includes("分红"); }
+function isDividendRecord(r) {
+    return r.remark && r.remark.includes("分红");
+}
 
 function updateProgress() {
     let profit = 0;
@@ -289,7 +312,9 @@ async function addRecord() {
     let amount = document.getElementById('amount').value;
     if (!date) { alert('请选择日期！'); return; }
     if (!amount || amount <= 0) { alert('请输入正确金额！'); return; }
-    if (type === '支出' && !document.getElementById('expenseSub').value) { alert('支出必须选择大类+小类！'); return; }
+    if (type === '支出' && !document.getElementById('expenseSub').value) {
+        alert('支出必须选择大类+小类！'); return;
+    }
 
     let main = document.getElementById('expenseMain')?.value || '';
     let sub = document.getElementById('expenseSub')?.value || '';
@@ -467,7 +492,7 @@ async function doAddUser() {
     hideAddUser();
 }
 
-// admin 导入Excel
+// admin 导入 Excel
 async function importExcel(e) {
     let file = e.target.files[0];
     if (!file) return;
@@ -477,7 +502,7 @@ async function importExcel(e) {
         let wb = XLSX.read(data, { type: 'array' });
         let ws = wb.Sheets[wb.SheetNames[0]];
         let json = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        json.shift();
+        json.shift(); // 去掉表头
         let success = 0;
         json.forEach(row => {
             if (!row[0]) return;
