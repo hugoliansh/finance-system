@@ -27,7 +27,7 @@ th{background:#f8f9fa}
 .report-table th{background:#f0f0f0;font-weight:bold}
 .chart-box{margin:30px 0;text-align:center}
 .chart-box canvas{max-height:400px;max-width:800px;margin:0 auto}
-.year-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:20px 0}
+.year-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(240,1fr));gap:16px;margin:20px 0}
 .overview-card{background:#f8f9fa;padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
 .overview-card h4{margin-top:0;margin-bottom:10px}
 .overview-card p{margin:4px 0;font-size:14px}
@@ -207,7 +207,7 @@ th{background:#f8f9fa}
 
 <script>
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
-const DATA_BIN_ID = "69cf5a1d36566621a875742d";
+const DATA_BIN_ID = "69cf5a1d36566621a875742";
 const USER_BIN_ID = "69cfc20e856a682189f79bb9";
 const DATA_BIN_URL = `https://api.jsonbin.io/v3/b/${DATA_BIN_ID}/latest`;
 const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
@@ -276,16 +276,22 @@ function getInitialInvestment() {
   return sum;
 }
 
-// 🔥 回本进度条：残值 + 2025年底前总支出
+// 🔥 回本进度条：残值 + 2025年底前总支出，利润=2026-01-01后运营收支（不含初始投入）
 function updateProgressBar() {
+  // 1. 计算初始投入（2025-12-31前，仅统计成本，不计入利润）
+  const initExpense = getInitialInvestment();
+  // 2. 计算总回本目标：残值 + 初始投入
+  const totalTarget = residualValue + initExpense;
+  // 3. 计算当期利润：仅2026-01-01之后的运营收支，完全排除初始投入
   let profit = 0;
   records.forEach(r => {
     if (r.type === "转账" || r.remark?.includes("分红")) return;
-    profit += r.type === "收入" ? r.amount : -r.amount;
+    // 核心修改：只统计2026-01-01及之后的收支，2025-12-31前的初始投入不计入利润
+    if (r.date > "2025-12-31") {
+      profit += r.type === "收入" ? r.amount : -r.amount;
+    }
   });
-
-  const initExpense = getInitialInvestment();
-  const totalTarget = residualValue + initExpense;
+  // 4. 计算回本进度
   let pct = 0;
   if (totalTarget > 0) {
     pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
@@ -568,15 +574,16 @@ function queryBalance() {
         if (r.type === "支出") bal[r.channel] -= r.amount;
         if (r.type === "转账") { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
     });
-    const total = Object.values(bal).reduce((a,b)=>a+b,0);
+    // 修复NaN：给每个值加兜底0，确保reduce计算正确
+    const total = Object.values(bal).reduce((a,b) => a + (b || 0), 0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
-支付宝：${bal.支付宝.toFixed(2)}
-微信：${bal.微信.toFixed(2)}
-兴业银行：${bal.兴业银行.toFixed(2)}
-公司账户：${bal.公司账户.toFixed(2)}
-刷卡：${bal.刷卡.toFixed(2)}
-合计：${total.toFixed(2)}`;
+支付宝：${(bal.支付宝 || 0).toFixed(2)}
+微信：${(bal.微信 || 0).toFixed(2)}
+兴业银行：${(bal.兴业银行 || 0).toFixed(2)}
+公司账户：${(bal.公司账户 || 0).toFixed(2)}
+刷卡：${(bal.刷卡 || 0).toFixed(2)}
+合计：${(total || 0).toFixed(2)}`;
 }
 
 function showMonthDetail() {
