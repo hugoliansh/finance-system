@@ -35,7 +35,6 @@ th{background:#f8f9fa}
 .pagination{margin:15px 0; display:flex; gap:10px; align-items:center}
 .pagination input{width:80px}
 
-/* 回本进度条样式 */
 .progress-container {
   width: 100%;
   background-color: #e0e0e0;
@@ -126,15 +125,6 @@ th{background:#f8f9fa}
 <div class="container">
     <h1>财务对账系统</h1>
 
-    <!-- 🔴 新增：选择统计年份 -->
-    <div class="form-group" style="margin-bottom:10px;">
-        <label>统计年份：</label>
-        <select id="statYear" style="width:100px;" onchange="updateProgressBar()">
-            <option value="2025" selected>2025年</option>
-            <option value="2026">2026年</option>
-        </select>
-    </div>
-
     <div class="progress-text" id="progressText"></div>
     <div class="progress-container">
         <div id="progressBar" class="progress-bar"></div>
@@ -223,7 +213,7 @@ const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 
 let currentUser = localStorage.getItem("user");
 let records = [];
-let residualValue = 0; // 公司残值（兼容旧版initialCapital）
+let initialCapital = 0; // 🔥 这个就是残值，唯一字段
 
 let page = 1;
 const pageSize = 50;
@@ -273,37 +263,37 @@ function refreshForm() {
     if (type === "支出") refreshSubCategory();
 }
 
-// 🔴 核心修复：按选择的年份统计总投入
-function getYearTotalExpense(year) {
-    let sum = 0;
-    records.forEach(r => {
-        if (r.type !== "支出") return;
-        // 统计逻辑：优先按归属月份，无归属按日期年份
-        const rYear = r.belongMonth ? r.belongMonth.substring(0,4) : r.date.substring(0,4);
-        if (rYear === year) sum += r.amount;
-    });
-    return sum;
+// 🔥 新初始投入：2025-12-31 前所有支出（纯计算，不存BIN）
+function getInitialInvestment() {
+  let sum = 0;
+  records.forEach(r => {
+    if (r.type !== "支出") return;
+    if (r.date <= "2025-12-31") {
+      sum += r.amount;
+    }
+  });
+  return sum;
 }
 
+// 🔥 回本进度条：残值(initialCapital) + 2025年底前总支出
 function updateProgressBar() {
-    const statYear = document.getElementById("statYear").value;
-    let profit = 0;
-    records.forEach(r => {
-        if (r.type === "转账" || r.remark?.includes("分红")) return;
-        profit += r.type === "收入" ? r.amount : -r.amount;
-    });
+  let profit = 0;
+  records.forEach(r => {
+    if (r.type === "转账" || r.remark?.includes("分红")) return;
+    profit += r.type === "收入" ? r.amount : -r.amount;
+  });
 
-    const yearExpense = getYearTotalExpense(statYear);
-    const totalTarget = residualValue + yearExpense;
-    let pct = 0;
-    if (totalTarget > 0) {
-        pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
-    }
+  const initExpense = getInitialInvestment();
+  const totalTarget = initialCapital + initExpense;
+  let pct = 0;
+  if (totalTarget > 0) {
+    pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
+  }
 
-    document.getElementById("progressText").innerText =
-        `公司残值：${residualValue.toFixed(2)} | ${statYear}总投入：${yearExpense.toFixed(2)} | 总回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
-    document.getElementById("progressBar").style.width = pct + "%";
-    document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
+  document.getElementById("progressText").innerText =
+    `公司残值：${initialCapital.toFixed(2)} | 2025年底前总投入：${initExpense.toFixed(2)} | 总回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
+  document.getElementById("progressBar").style.width = pct + "%";
+  document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
 }
 
 function showCategoryGuide() {
@@ -375,32 +365,25 @@ async function loadData() {
     try {
         let res = await fetch(DATA_BIN_URL, { headers: { "X-Master-Key": API_KEY } });
         let data = await res.json();
-        let loaded = data.record?.records || [];
-        // 双向兼容，优先读residualValue，没有就读旧的initialCapital
-        let loadedResidual = data.record?.residualValue;
-        let loadedOldInitial = data.record?.initialCapital;
-        let finalResidual = (loadedResidual !== undefined && loadedResidual !== null) ? loadedResidual : (loadedOldInitial || 0);
-        
+        let loadedRecords = data.record?.records || [];
+        let loadedCapital = data.record?.initialCapital || 0;
+
         return {
-            records: loaded.map(r => ({ ...r, date: r.date || r.payDate })),
-            residualValue: finalResidual,
-            initialCapital: finalResidual
+            records: loadedRecords.map(r => ({ ...r, date: r.date || r.payDate })),
+            initialCapital: loadedCapital
         };
     } catch (e) {
         console.error(e);
-        return { records: [], residualValue: 0, initialCapital: 0 };
+        return { records: [], initialCapital: 0 };
     }
 }
+
 async function saveData(data) {
     try {
-        const saveData = {
-            ...data,
-            initialCapital: data.residualValue
-        };
         await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-            body: JSON.stringify(saveData)
+            body: JSON.stringify(data)
         });
         return true;
     } catch (e) {
@@ -453,7 +436,7 @@ window.onload = async () => {
 
     const cloud = await loadData();
     records = cloud.records || [];
-    residualValue = cloud.residualValue || 0;
+    initialCapital = cloud.initialCapital || 0;
     refreshAll();
 };
 
@@ -471,11 +454,12 @@ function refreshSubCategory() {
     });
 }
 
+// 🔥 修改残值 = 修改 initialCapital
 async function showEditResidual() {
-    const v = prompt("修改公司残值", residualValue);
+    const v = prompt("修改公司残值", initialCapital);
     if (v == null) return;
-    residualValue = Number(v) || 0;
-    await saveData({ records, residualValue });
+    initialCapital = Number(v) || 0;
+    await saveData({ records, initialCapital });
     refreshAll();
 }
 
@@ -510,7 +494,7 @@ async function addRecord() {
     };
 
     records.unshift(r);
-    await saveData({ records, residualValue });
+    await saveData({ records, initialCapital });
     refreshAll();
     alert("保存成功");
 }
@@ -826,10 +810,10 @@ async function importExcel(e) {
             if (r.amount <=0) return;
             records.unshift(r); cnt++;
         });
-        await saveData({ records, residualValue });
+        await saveData({ records, initialCapital });
         refreshAll();
         alert(`导入成功 ${cnt} 条`);
-        document.getElementById("importFile").value = "";
+        document.getElementById("importFile").value = "");
     };
     reader.readAsArrayBuffer(file);
 }
