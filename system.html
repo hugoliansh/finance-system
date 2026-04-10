@@ -147,17 +147,21 @@ th{background:#f8f9fa}
     <div class="form-group" id="belongMonthGroup" style="display:none;">
         <label>归属月份：</label><input type="month" id="belongMonth">
     </div>
-    <div class="form-group"><label>支付/转出：</label>
+    <!-- 收入/支出/转账 账户字段 -->
+    <div class="form-group" id="channelGroup">
+        <label id="channelLabel">支付/转出：</label>
         <select id="channel">
             <option value="支付宝">支付宝</option><option value="微信">微信</option>
             <option value="兴业银行">兴业银行</option><option value="公司账户">公司账户</option>
+            <option value="刷卡">刷卡</option>
         </select>
     </div>
-    <div class="form-group" id="toChannelGroup" style="display:none;">
-        <label>转入账户：</label>
+    <div class="form-group" id="toChannelGroup">
+        <label id="toChannelLabel">转入账户：</label>
         <select id="toChannel">
             <option value="支付宝">支付宝</option><option value="微信">微信</option>
             <option value="兴业银行">兴业银行</option><option value="公司账户">公司账户</option>
+            <option value="刷卡">刷卡</option>
         </select>
     </div>
     <div class="form-group"><label>金额：</label><input type="number" id="amount" step="0.01" required></div>
@@ -220,6 +224,42 @@ const expenseCategories = {
 };
 
 const mainCategories = Object.keys(expenseCategories);
+
+// ==============================
+// 【核心修复：表单字段显示逻辑】
+// ==============================
+function refreshForm() {
+    const type = document.getElementById("recordType").value;
+    const channelGroup = document.getElementById("channelGroup");
+    const toChannelGroup = document.getElementById("toChannelGroup");
+    const channelLabel = document.getElementById("channelLabel");
+    const toChannelLabel = document.getElementById("toChannelLabel");
+
+    // 支出大类只在支出时显示
+    document.getElementById("expenseTypeGroup").style.display = type === "支出" ? "block" : "none";
+
+    if (type === "收入") {
+        // 收入：只显示「转入账户」，隐藏「支付/转出」
+        channelGroup.style.display = "none";
+        toChannelGroup.style.display = "block";
+        channelLabel.innerText = "支付/转出：";
+        toChannelLabel.innerText = "转入账户：";
+    } else if (type === "支出") {
+        // 支出：只显示「支付/转出」，隐藏「转入账户」
+        channelGroup.style.display = "block";
+        toChannelGroup.style.display = "none";
+        channelLabel.innerText = "支付/转出：";
+        toChannelLabel.innerText = "转入账户：";
+    } else if (type === "转账") {
+        // 转账：同时显示「转出 + 转入」
+        channelGroup.style.display = "block";
+        toChannelGroup.style.display = "block";
+        channelLabel.innerText = "转出账户：";
+        toChannelLabel.innerText = "转入账户：";
+    }
+
+    if (type === "支出") refreshSubCategory();
+}
 
 // ==============================
 // 【回本进度条】
@@ -388,6 +428,9 @@ window.onload = async () => {
         mainSel.appendChild(opt);
     });
 
+    // 初始化表单显示（默认收入）
+    refreshForm();
+
     const cloud = await loadData();
     records = cloud.records || [];
     initialCapital = cloud.initialCapital || 0;
@@ -395,13 +438,6 @@ window.onload = async () => {
 };
 
 function logout() { localStorage.clear(); location.href = "index.html"; }
-
-function refreshForm() {
-    const t = document.getElementById("recordType").value;
-    document.getElementById("expenseTypeGroup").style.display = t === "支出" ? "block" : "none";
-    document.getElementById("toChannelGroup").style.display = t === "转账" ? "block" : "none";
-    if (t === "支出") refreshSubCategory();
-}
 
 function refreshSubCategory() {
     const m = document.getElementById("expenseMain").value;
@@ -428,8 +464,6 @@ function refreshAll() {
     updateProgressBar();
 }
 
-function updateProgress() {}
-
 async function addRecord() {
     const d = document.getElementById("payDate").value;
     const t = document.getElementById("recordType").value;
@@ -438,14 +472,16 @@ async function addRecord() {
 
     const main = document.getElementById("expenseMain")?.value;
     const sub = document.getElementById("expenseSub")?.value;
+    const channel = document.getElementById("channel").value;
+    const toChannel = document.getElementById("toChannel").value;
 
     const r = {
         date: d,
         type: t,
         category: t === "支出" ? `${main}-${sub}` : "",
         belongMonth: document.getElementById("belongMonth").value || "",
-        channel: document.getElementById("channel").value,
-        toChannel: document.getElementById("toChannel")?.value || "",
+        channel: channel,
+        toChannel: toChannel,
         amount: a,
         remark: document.getElementById("remark").value,
         operator: currentUser,
@@ -458,15 +494,41 @@ async function addRecord() {
     alert("保存成功");
 }
 
+// ==============================
+// 【核心修复：流水列表显示逻辑】
+// ==============================
 function renderList() {
     const b = document.getElementById("recordBody");
     b.innerHTML = "";
     records.forEach(r => {
         const op = currentUser === "admin" ? `<td>${r.operateTime}</td>` : "";
+        let accountCell = "-", toCell = "-";
+
+        if (r.type === "收入") {
+            // 收入：只显示转入账户
+            toCell = r.toChannel || r.channel; // 兼容旧数据
+            accountCell = "-";
+        } else if (r.type === "支出") {
+            // 支出：只显示支出账户
+            accountCell = r.channel;
+            toCell = "-";
+        } else if (r.type === "转账") {
+            // 转账：同时显示转出+转入
+            accountCell = r.channel;
+            toCell = r.toChannel;
+        }
+
         b.innerHTML += `<tr>
-<td>${r.date}</td><td>${r.type}</td><td>${r.category||"-"}</td>
-<td>${r.channel}</td><td>${r.toChannel||"-"}</td><td>${r.amount.toFixed(2)}</td>
-<td>${r.operator}</td>${op}<td>${r.remark}</td></tr>`;
+<td>${r.date}</td>
+<td>${r.type}</td>
+<td>${r.category||"-"}</td>
+<td>${accountCell}</td>
+<td>${toCell}</td>
+<td>${r.amount.toFixed(2)}</td>
+<td>${r.operator}</td>
+${op}
+<td>${r.remark}</td>
+</tr>`;
     });
 }
 
@@ -485,19 +547,20 @@ function queryDaily() {
 function queryBalance() {
     const d = document.getElementById("queryDate").value;
     const list = records.filter(x => x.date <= d);
-    const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0};
+    const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0};
     list.forEach(r => {
-        if (r.type === "收入") bal[r.channel] += r.amount;
+        if (r.type === "收入") bal[r.toChannel || r.channel] += r.amount;
         if (r.type === "支出") bal[r.channel] -= r.amount;
         if (r.type === "转账") { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
     });
-    const total = bal.支付宝 + bal.微信 + bal.兴业银行 + bal.公司账户;
+    const total = Object.values(bal).reduce((a,b)=>a+b,0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
 支付宝：${bal.支付宝.toFixed(2)}
 微信：${bal.微信.toFixed(2)}
 兴业银行：${bal.兴业银行.toFixed(2)}
 公司账户：${bal.公司账户.toFixed(2)}
+刷卡：${bal.刷卡.toFixed(2)}
 合计：${total.toFixed(2)}`;
 }
 
@@ -677,11 +740,17 @@ function exportRangeRecords() {
     const s = document.getElementById("exportStart").value;
     const e = document.getElementById("exportEnd").value;
     const data = records.filter(x => x.date >= s && x.date <= e);
-    const aoa = [["日期","类型","分类","转出","转入","金额","操作人","备注"]];
-    data.forEach(r => aoa.push([
-        r.date, r.type, r.category||"-", r.channel, r.toChannel||"-",
-        r.amount, r.operator, r.remark
-    ]));
+    const aoa = [["日期","类型","分类","账户","转入","金额","操作人","备注"]];
+    data.forEach(r => {
+        let account = "-", to = "-";
+        if (r.type === "收入") { to = r.toChannel || r.channel; }
+        else if (r.type === "支出") { account = r.channel; }
+        else if (r.type === "转账") { account = r.channel; to = r.toChannel; }
+        aoa.push([
+            r.date, r.type, r.category||"-", account, to,
+            r.amount, r.operator, r.remark
+        ]);
+    });
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "流水");
