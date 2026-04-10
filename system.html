@@ -144,6 +144,7 @@ th{background:#f8f9fa}
         <select id="expenseMain" onchange="refreshSubCategory()"></select>
         <label style="width:80px;">小类：</label><select id="expenseSub"></select>
     </div>
+    <!-- 归属月份：仅支出时显示 -->
     <div class="form-group" id="belongMonthGroup" style="display:none;">
         <label>归属月份：</label><input type="month" id="belongMonth">
     </div>
@@ -226,17 +227,20 @@ const expenseCategories = {
 const mainCategories = Object.keys(expenseCategories);
 
 // ==============================
-// 【核心修复：表单字段显示逻辑】
+// 【核心修复1：表单字段显示逻辑（含归属月份）】
 // ==============================
 function refreshForm() {
     const type = document.getElementById("recordType").value;
     const channelGroup = document.getElementById("channelGroup");
     const toChannelGroup = document.getElementById("toChannelGroup");
+    const belongMonthGroup = document.getElementById("belongMonthGroup");
     const channelLabel = document.getElementById("channelLabel");
     const toChannelLabel = document.getElementById("toChannelLabel");
 
     // 支出大类只在支出时显示
     document.getElementById("expenseTypeGroup").style.display = type === "支出" ? "block" : "none";
+    // 归属月份：仅支出时显示（工资/房租专用）
+    belongMonthGroup.style.display = type === "支出" ? "block" : "none";
 
     if (type === "收入") {
         // 收入：只显示「转入账户」，隐藏「支付/转出」
@@ -474,12 +478,13 @@ async function addRecord() {
     const sub = document.getElementById("expenseSub")?.value;
     const channel = document.getElementById("channel").value;
     const toChannel = document.getElementById("toChannel").value;
+    const belongMonth = document.getElementById("belongMonth").value || "";
 
     const r = {
         date: d,
         type: t,
         category: t === "支出" ? `${main}-${sub}` : "",
-        belongMonth: document.getElementById("belongMonth").value || "",
+        belongMonth: belongMonth,
         channel: channel,
         toChannel: toChannel,
         amount: a,
@@ -495,7 +500,7 @@ async function addRecord() {
 }
 
 // ==============================
-// 【核心修复：流水列表显示逻辑】
+// 【流水列表显示逻辑】
 // ==============================
 function renderList() {
     const b = document.getElementById("recordBody");
@@ -506,7 +511,7 @@ function renderList() {
 
         if (r.type === "收入") {
             // 收入：只显示转入账户
-            toCell = r.toChannel || r.channel; // 兼容旧数据
+            toCell = r.toChannel || r.channel;
             accountCell = "-";
         } else if (r.type === "支出") {
             // 支出：只显示支出账户
@@ -565,13 +570,14 @@ function queryBalance() {
 }
 
 // ==============================
-// 月度明细（大类 + 小类 占比）
+// 【核心修复2：月度明细（优先归属月份，大类+小类占比）】
 // ==============================
 function showMonthDetail() {
     const m = document.getElementById("monthQuery").value;
     if (!m) { alert("请选择月份"); return; }
+    // 统计规则：优先按归属月份，无归属按日期年月
     const list = records.filter(x =>
-        x.belongMonth === m || (!x.belongMonth && x.date.startsWith(m))
+        (x.belongMonth === m) || (!x.belongMonth && x.date.startsWith(m))
     );
 
     let income = 0, expense = 0;
@@ -593,7 +599,7 @@ function showMonthDetail() {
         }
     });
 
-    let html = `<h3>${m} 月度经营分析（大类+小类）</h3>
+    let html = `<h3>${m} 月度经营分析（大类+小类，按归属月份统计）</h3>
 <div class="year-overview">
     <div class="overview-card">
         <p>收入：${income.toFixed(2)}</p>
@@ -605,7 +611,7 @@ function showMonthDetail() {
 
 <h4>支出大类占比</h4>
 <table class="report-table">
-<tr><th>大类</th><th>金额</th><th>占比</th></tr>`;
+<tr><th>大类</th><th>金额</th><th>占当月支出比</th></tr>`;
 
     mainCategories.forEach(c => {
         const val = mainSum[c];
@@ -628,22 +634,27 @@ function showMonthDetail() {
 }
 
 // ==============================
-// 年度财报（只统计大类）
+// 【核心修复3：年度财报（优先归属月份，仅大类统计）】
 // ==============================
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const rentInput = Number(document.getElementById("yearRent").value) || 0;
     if (!y) { alert("请输入年份"); return; }
 
-    const list = records.filter(r =>
-        r.date.startsWith(y + "-") && r.type !== "转账" && !r.remark?.includes("分红")
-    );
+    // 统计规则：优先按归属月份，无归属按日期年月
+    const list = records.filter(r => {
+        if (r.type === "转账" || r.remark?.includes("分红")) return false;
+        // 归属月份属于当年，或日期属于当年
+        const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
+        return (belongYear === y) || r.date.startsWith(y + "-");
+    });
 
     const monthMap = {};
     for (let i=1; i<=12; i++) {
         const m = String(i).padStart(2, '0');
-        monthMap[`${y}-${m}`] = { income:0, expense:0, profit:0, margin:0 };
-        mainCategories.forEach(c => monthMap[`${y}-${m}`][c] = 0);
+        const key = `${y}-${m}`;
+        monthMap[key] = { income:0, expense:0, profit:0, margin:0 };
+        mainCategories.forEach(c => monthMap[key][c] = 0);
     }
 
     let yearIncome = 0, yearExpense = 0;
@@ -651,7 +662,8 @@ function genYearReport() {
     mainCategories.forEach(c => yearCat[c] = 0);
 
     list.forEach(r => {
-        const mon = r.date.substring(0,7);
+        // 确定统计月份：优先归属月份，无归属按日期
+        const mon = r.belongMonth || r.date.substring(0,7);
         if (!monthMap[mon]) return;
         const amt = r.amount;
         if (r.type === "收入") {
@@ -679,7 +691,7 @@ function genYearReport() {
     const yearMargin = yearIncome > 0 ? (yearProfit / yearIncome * 100).toFixed(1) : "—";
 
     let html = `
-<h3>${y} 年度经营分析报告（仅支出大类）</h3>
+<h3>${y} 年度经营分析报告（仅支出大类，按归属月份统计）</h3>
 <div class="year-overview">
     <div class="overview-card">
         <p>年度总收入：${yearIncome.toFixed(2)}</p>
