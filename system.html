@@ -220,10 +220,10 @@ function getInitialInvestment(){
 function getCurrentProfit(){
     let profit = 0;
     records.forEach(r => {
-        // 只算2026年之后
         if (r.date < "2026-01-01") return;
-        // 不算转账、不算分红、不算平账
-        if (r.type === "转账" || r.remark?.includes("分红") || r.remark?.includes("平账")) return;
+        
+        if (r.type === "转账") return;
+        if (r.remark?.includes("分红")) return;
         
         if (r.type === "收入") profit += r.amount;
         if (r.type === "支出") profit -= r.amount;
