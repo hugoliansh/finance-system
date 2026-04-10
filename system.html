@@ -214,7 +214,7 @@ const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 
 let currentUser = localStorage.getItem("user");
 let records = [];
-let residualValue = 0;
+let residualValue = 0; // 公司残值（兼容旧版initialCapital）
 
 let page = 1;
 const pageSize = 50;
@@ -363,21 +363,33 @@ async function loadData() {
         let res = await fetch(DATA_BIN_URL, { headers: { "X-Master-Key": API_KEY } });
         let data = await res.json();
         let loaded = data.record?.records || [];
+        // 🔴 核心修复1：双向兼容，优先读residualValue，没有就读旧的initialCapital
+        let loadedResidual = data.record?.residualValue;
+        let loadedOldInitial = data.record?.initialCapital;
+        // 自动迁移：如果residualValue为空，用旧的initialCapital
+        let finalResidual = (loadedResidual !== undefined && loadedResidual !== null) ? loadedResidual : (loadedOldInitial || 0);
+        
         return {
             records: loaded.map(r => ({ ...r, date: r.date || r.payDate })),
-            residualValue: data.record?.residualValue || 0
+            residualValue: finalResidual,
+            initialCapital: finalResidual // 🔴 同时保留旧字段，双向兼容
         };
     } catch (e) {
         console.error(e);
-        return { records: [], residualValue: 0 };
+        return { records: [], residualValue: 0, initialCapital: 0 };
     }
 }
 async function saveData(data) {
     try {
+        // 🔴 核心修复2：保存时同时写residualValue和initialCapital，确保jsonbin里两个字段一致
+        const saveData = {
+            ...data,
+            initialCapital: data.residualValue // 同步旧字段
+        };
         await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json", "X-Master-Key": API_KEY },
-            body: JSON.stringify(data)
+            body: JSON.stringify(saveData)
         });
         return true;
     } catch (e) {
