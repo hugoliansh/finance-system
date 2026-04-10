@@ -35,6 +35,7 @@ th{background:#f8f9fa}
 .pagination{margin:15px 0; display:flex; gap:10px; align-items:center}
 .pagination input{width:80px}
 
+/* 回本进度条样式 */
 .progress-container {
   width: 100%;
   background-color: #e0e0e0;
@@ -213,7 +214,7 @@ const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 
 let currentUser = localStorage.getItem("user");
 let records = [];
-let initialCapital = 0; // 🔥 这个就是残值，唯一字段
+let residualValue = 0;
 
 let page = 1;
 const pageSize = 50;
@@ -275,7 +276,7 @@ function getInitialInvestment() {
   return sum;
 }
 
-// 🔥 回本进度条：残值(initialCapital) + 2025年底前总支出
+// 🔥 回本进度条：残值 + 2025年底前总支出
 function updateProgressBar() {
   let profit = 0;
   records.forEach(r => {
@@ -284,14 +285,14 @@ function updateProgressBar() {
   });
 
   const initExpense = getInitialInvestment();
-  const totalTarget = initialCapital + initExpense;
+  const totalTarget = residualValue + initExpense;
   let pct = 0;
   if (totalTarget > 0) {
     pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
   }
 
   document.getElementById("progressText").innerText =
-    `公司残值：${initialCapital.toFixed(2)} | 2025年底前总投入：${initExpense.toFixed(2)} | 总回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
+    `公司残值：${residualValue.toFixed(2)} | 2025年底前总投入：${initExpense.toFixed(2)} | 总回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
   document.getElementById("progressBar").style.width = pct + "%";
   document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
 }
@@ -366,15 +367,14 @@ async function loadData() {
         let res = await fetch(DATA_BIN_URL, { headers: { "X-Master-Key": API_KEY } });
         let data = await res.json();
         let loadedRecords = data.record?.records || [];
-        let loadedCapital = data.record?.initialCapital || 0;
 
         return {
             records: loadedRecords.map(r => ({ ...r, date: r.date || r.payDate })),
-            initialCapital: loadedCapital
+            residualValue: data.record?.residualValue || 0
         };
     } catch (e) {
         console.error(e);
-        return { records: [], initialCapital: 0 };
+        return { records: [], residualValue: 0 };
     }
 }
 
@@ -436,7 +436,7 @@ window.onload = async () => {
 
     const cloud = await loadData();
     records = cloud.records || [];
-    initialCapital = cloud.initialCapital || 0;
+    residualValue = cloud.residualValue || 0;
     refreshAll();
 };
 
@@ -454,12 +454,11 @@ function refreshSubCategory() {
     });
 }
 
-// 🔥 修改残值 = 修改 initialCapital
 async function showEditResidual() {
-    const v = prompt("修改公司残值", initialCapital);
+    const v = prompt("修改公司残值", residualValue);
     if (v == null) return;
-    initialCapital = Number(v) || 0;
-    await saveData({ records, initialCapital });
+    residualValue = Number(v) || 0;
+    await saveData({ records, residualValue });
     refreshAll();
 }
 
@@ -494,7 +493,7 @@ async function addRecord() {
     };
 
     records.unshift(r);
-    await saveData({ records, initialCapital });
+    await saveData({ records, residualValue });
     refreshAll();
     alert("保存成功");
 }
@@ -810,10 +809,10 @@ async function importExcel(e) {
             if (r.amount <=0) return;
             records.unshift(r); cnt++;
         });
-        await saveData({ records, initialCapital });
+        await saveData({ records, residualValue });
         refreshAll();
         alert(`导入成功 ${cnt} 条`);
-        document.getElementById("importFile").value = "");
+        document.getElementById("importFile").value = "";
     };
     reader.readAsArrayBuffer(file);
 }
