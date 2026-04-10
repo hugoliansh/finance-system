@@ -410,68 +410,178 @@ function queryBalance(){
 合计：${total.toFixed(2)}`;
 }
 
-// ✅ 月报：只算归属月份，收−支，不含转账
-function showMonthDetail(){
-    const m=document.getElementById("monthQuery").value;
-    if(!m){alert("请选择月份");return;}
-    const list=records.filter(x=>
-        (x.belongMonth===m)||(!x.belongMonth&&x.date.startsWith(m))
+// ======================
+// 【原版完整月报】100% 还原
+// ======================
+function showMonthDetail() {
+    const m = document.getElementById("monthQuery").value;
+    if (!m) { alert("请选择月份"); return; }
+    const list = records.filter(x =>
+        (x.belongMonth === m) || (!x.belongMonth && x.date.startsWith(m))
     );
-    let income=0,expense=0;
-    let mainSum={},subSum={};
-    mainCategories.forEach(c=>mainSum[c]=0);
-    list.forEach(r=>{
-        if(r.type==="转账"||r.remark?.includes("分红"))return;
-        const amt=r.amount;
-        if(r.type==="收入") income+=amt;
-        else{
-            expense+=amt;
-            const [mc]= (r.category||"").split("-");
-            if(mc&&mainSum[mc]!==undefined) mainSum[mc]+=amt;
-            subSum[r.category]=(subSum[r.category]||0)+amt;
+
+    let income = 0, expense = 0;
+    let mainSum = {};
+    let subSum = {};
+    mainCategories.forEach(c => { mainSum[c] = 0; });
+
+    list.forEach(r => {
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        const amt = r.amount;
+        if (r.type === "收入") {
+            income += amt;
+        } else {
+            expense += amt;
+            const full = r.category || "";
+            const [mc, sc] = full.split("-", 2);
+            if (mc && mainSum[mc] !== undefined) mainSum[mc] += amt;
+            subSum[full] = (subSum[full] || 0) + amt;
         }
     });
-    let html=`<h3>${m} 月度经营分析</h3>
-<div class="overview-card">
-<p>收入：${income.toFixed(2)}</p>
-<p>支出：${expense.toFixed(2)}</p>
-<p>净利：${(income-expense).toFixed(2)}</p>
+
+    let html = `<h3>${m} 月度经营分析（大类+小类，按归属月份统计）</h3>
+<div class="year-overview">
+    <div class="overview-card">
+        <p>收入：${income.toFixed(2)}</p>
+        <p>支出：${expense.toFixed(2)}</p>
+        <p>净利：${(income - expense).toFixed(2)}</p>
+        <p>利润率：${income>0 ? ((income-expense)/income*100).toFixed(1)+'%' : '—'}</p>
+    </div>
 </div>
-<table class="report-table"><tr><th>大类</th><th>金额</th></tr>`;
-    mainCategories.forEach(c=>{
-        html+=`<tr><td>${c}</td><td>${mainSum[c].toFixed(2)}</td></tr>`;
+
+<h4>支出大类占比</h4>
+<table class="report-table">
+<tr><th>大类</th><th>金额</th><th>占当月支出比</th></tr>`;
+
+    mainCategories.forEach(c => {
+        const val = mainSum[c];
+        const p = expense > 0 ? (val / expense * 100).toFixed(1) : 0;
+        html += `<tr><td>${c}</td><td>${val.toFixed(2)}</td><td>${p}%</td></tr>`;
     });
-    document.getElementById("reportTitle").innerText=m+"月度明细";
-    document.getElementById("reportContent").innerHTML=html;
-    document.getElementById("reportModal").style.display="block";
+
+    html += `</table><h4>支出小类占比</h4><table class="report-table">
+<tr><th>小类</th><th>金额</th><th>占比</th></tr>`;
+
+    Object.entries(subSum).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
+        const pct = expense>0 ? (v/expense*100).toFixed(1) : 0;
+        html += `<tr><td>${k}</td><td>${v.toFixed(2)}</td><td>${pct}%</td></tr>`;
+    });
+
+    html += `</table>`;
+    document.getElementById("reportTitle").innerText = m + "月度分析";
+    document.getElementById("reportContent").innerHTML = html;
+    document.getElementById("reportModal").style.display = "block";
 }
 
-// ✅ 年报：归属年份，收−支，不含转账
-function genYearReport(){
-    const y=document.getElementById("yearInput").value;
-    const rent=Number(document.getElementById("yearRent").value)||0;
-    if(!y){alert("请输入年份");return;}
-    const list=records.filter(r=>{
-        if(r.type==="转账"||r.remark?.includes("分红"))return false;
-        const by=r.belongMonth?r.belongMonth.substring(0,4):"";
-        return by===y||r.date.startsWith(y+"-");
-    });
-    let income=0,expense=0;
-    list.forEach(r=>{
-        r.type==="收入"?income+=r.amount:expense+=r.amount;
-    });
-    const profit=income-expense-rent;
-    document.getElementById("reportContent").innerHTML=
-`<div class="overview-card">
-<p>年度收入：${income.toFixed(2)}</p>
-<p>年度支出：${expense.toFixed(2)}</p>
-<p>租金：${rent.toFixed(2)}</p>
-<p>年度净利：${profit.toFixed(2)}</p>
-</div>`;
-    document.getElementById("reportTitle").innerText=y+"年度财报";
-    document.getElementById("reportModal").style.display="block";
-}
+// ======================
+// 【原版完整年报】100% 还原（含图表、租金、月度概览）
+// ======================
+function genYearReport() {
+    const y = document.getElementById("yearInput").value;
+    const rentInput = Number(document.getElementById("yearRent").value) || 0;
+    if (!y) { alert("请输入年份"); return; }
 
+    const list = records.filter(r => {
+        if (r.type === "转账" || r.remark?.includes("分红")) return false;
+        const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
+        return (belongYear === y) || r.date.startsWith(y + "-");
+    });
+
+    const monthMap = {};
+    for (let i=1; i<=12; i++) {
+        const m = String(i).padStart(2, '0');
+        const key = `${y}-${m}`;
+        monthMap[key] = { income:0, expense:0, profit:0, margin:0 };
+        mainCategories.forEach(c => monthMap[key][c] = 0);
+    }
+
+    let yearIncome = 0, yearExpense = 0;
+    const yearCat = {};
+    mainCategories.forEach(c => yearCat[c] = 0);
+
+    list.forEach(r => {
+        const mon = r.belongMonth || r.date.substring(0,7);
+        if (!monthMap[mon]) return;
+        const amt = r.amount;
+        if (r.type === "收入") {
+            monthMap[mon].income += amt;
+            yearIncome += amt;
+        } else {
+            monthMap[mon].expense += amt;
+            yearExpense += amt;
+            const c = r.category?.split("-")[0];
+            if (yearCat[c] !== undefined) {
+                monthMap[mon][c] += amt;
+                yearCat[c] += amt;
+            }
+        }
+    });
+
+    const months = Object.keys(monthMap).sort();
+    months.forEach(m => {
+        const d = monthMap[m];
+        d.profit = d.income - d.expense;
+        d.margin = d.income > 0 ? (d.profit / d.income * 100) : 0;
+    });
+
+    const yearProfit = yearIncome - yearExpense - rentInput;
+    const yearMargin = yearIncome > 0 ? (yearProfit / yearIncome * 100).toFixed(1) : "—";
+
+    let html = `
+<h3>${y} 年度经营分析报告（仅支出大类，按归属月份统计）</h3>
+<div class="year-overview">
+    <div class="overview-card">
+        <p>年度总收入：${yearIncome.toFixed(2)}</p>
+        <p>年度总支出：${yearExpense.toFixed(2)}</p>
+        <p>全年租金：${rentInput.toFixed(2)}</p>
+        <p>年度净利润：${yearProfit.toFixed(2)}</p>
+        <p>年度利润率：${yearMargin}%</p>
+    </div>
+</div>
+
+<h4>月度收支概览</h4>
+<table class="report-table">
+<tr><th>月份</th><th>收入</th><th>支出</th><th>净利</th><th>利润率</th></tr>`;
+
+    months.forEach(m => {
+        const d = monthMap[m];
+        html += `<tr>
+<td>${m}</td>
+<td>${d.income.toFixed(0)}</td>
+<td>${d.expense.toFixed(0)}</td>
+<td>${d.profit.toFixed(0)}</td>
+<td>${d.margin.toFixed(1)}%</td>
+</tr>`;
+    });
+
+    html += `</table><h4>年度支出结构（仅大类）</h4>
+<table class="report-table">
+<tr><th>支出大类</th><th>金额</th><th>占总支出比</th></tr>`;
+
+    mainCategories.forEach(c => {
+        const v = yearCat[c];
+        const p = yearExpense>0 ? (v/yearExpense*100).toFixed(1) : 0;
+        html += `<tr><td>${c}</td><td>${v.toFixed(2)}</td><td>${p}%</td></tr>`;
+    });
+
+    html += `</div>
+<div class="chart-box"><h4>年度支出饼图</h4><canvas id="yearPieChart"></canvas></div>`;
+
+    document.getElementById("reportTitle").innerText = y + "年度财报";
+    document.getElementById("reportContent").innerHTML = html;
+    document.getElementById("reportModal").style.display = "block";
+
+    setTimeout(() => {
+        const labels = [], values = [];
+        const colors = ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"];
+        mainCategories.forEach((c,i) => { labels.push(c); values.push(yearCat[c]); });
+        new Chart(document.getElementById("yearPieChart").getContext("2d"), {
+            type:"pie",
+            data:{labels,datasets:[{data:values,backgroundColor:colors}]},
+            options:{plugins:{legend:{position:"right"}}}
+        });
+    },100);
+}
 function closeReport(){document.getElementById("reportModal").style.display="none";}
 function showCategoryGuide(){document.getElementById("categoryModal").style.display="block";}
 function closeCategoryGuide(){document.getElementById("categoryModal").style.display="none";}
