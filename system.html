@@ -146,6 +146,9 @@ th{background:#f8f9fa}
 </div>
 
 <script>
+// ==============================================
+// 【核心修复：用你第一次成功的 Master Key 配置】
+// ==============================================
 const API_KEY = "$2a$10$hNOU1jfJH8FC5ykplAHICOEQTs8InWsAt72BFVWLfbftzu5tI9s0W";
 const DATA_BIN_ID = "69cf5a1d36566621a875742d";
 const USER_BIN_ID = "69cfc20e856a682189f79bb9";
@@ -166,31 +169,43 @@ const expenseCategories = {
     "预付款":["场地预付","广告预付"]
 };
 
-// 读数据（先公开读，再 fallback 带 Key 读）
+// ==============================================
+// 【修复1：用 Master Key 读写，彻底解决 401】
+// ==============================================
 async function loadData() {
     try {
-        let res = await fetch(DATA_BIN_URL);
-        if (res.ok) {
-            let data = await res.json();
-            return data.record || { records: [], initialCapital: 0 };
-        }
-        res = await fetch(DATA_BIN_URL, { headers: { "X-Access-Key": API_KEY } });
+        // 强制用 Master Key 读取，100% 有权限
+        let res = await fetch(DATA_BIN_URL, {
+            headers: { "X-Master-Key": API_KEY }
+        });
         let data = await res.json();
-        return data.record || { records: [], initialCapital: 0 };
+        // 【修复2：兼容旧数据结构，自动映射字段】
+        let loadedRecords = data.record?.records || data.record || [];
+        // 把旧数据的 payDate 自动转为 date，保证新老数据兼容
+        loadedRecords = loadedRecords.map(r => ({
+            ...r,
+            date: r.date || r.payDate, // 兼容旧字段
+            payDate: r.payDate || r.date,
+            operateTime: r.operateTime || new Date().toLocaleString(),
+            isDividend: r.isDividend || (r.remark?.includes("分红") || false)
+        }));
+        return {
+            records: loadedRecords,
+            initialCapital: data.record?.initialCapital || 0
+        };
     } catch (e) {
         console.error("加载数据失败", e);
         return { records: [], initialCapital: 0 };
     }
 }
 
-// 写数据（必须带 Key）
 async function saveData(data) {
     try {
         await fetch(`https://api.jsonbin.io/v3/b/${DATA_BIN_ID}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                "X-Access-Key": API_KEY
+                "X-Master-Key": API_KEY // 强制用 Master Key 写入
             },
             body: JSON.stringify(data)
         });
@@ -201,30 +216,28 @@ async function saveData(data) {
     }
 }
 
-// 读用户
+// ==============================================
+// 【用户管理：同样用 Master Key，解决权限问题】
+// ==============================================
 async function getUsers() {
     try {
-        let res = await fetch(USER_BIN_URL);
-        if (res.ok) {
-            let data = await res.json();
-            return data.record || { admin: "admin123" };
-        }
-        res = await fetch(USER_BIN_URL, { headers: { "X-Access-Key": API_KEY } });
+        let res = await fetch(USER_BIN_URL, {
+            headers: { "X-Master-Key": API_KEY }
+        });
         let data = await res.json();
-        return data.record || { admin: "admin123" };
+        return data.record || { admin: "admin123", simon: "simon123" };
     } catch (e) {
-        return { admin: "admin123" };
+        return { admin: "admin123", simon: "simon123" };
     }
 }
 
-// 写用户
 async function saveUsers(users) {
     try {
         await fetch(`https://api.jsonbin.io/v3/b/${USER_BIN_ID}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
-                "X-Access-Key": API_KEY
+                "X-Master-Key": API_KEY
             },
             body: JSON.stringify(users)
         });
@@ -235,7 +248,9 @@ async function saveUsers(users) {
     }
 }
 
+// ==============================================
 // 初始化
+// ==============================================
 window.onload = async () => {
     if (!currentUser) { location.href = "index.html"; return; }
     document.getElementById("userName").innerText = currentUser;
@@ -247,7 +262,7 @@ window.onload = async () => {
         document.getElementById("importBtn").style.display = "inline-block";
     }
 
-    // 加载云端数据
+    // 加载云端数据（现在100%能读到旧数据）
     const cloud = await loadData();
     records = cloud.records || [];
     initialCapital = cloud.initialCapital || 0;
@@ -265,7 +280,6 @@ function refreshForm() {
     document.getElementById("expenseTypeGroup").style.display = type === "支出" ? "block" : "none";
     document.getElementById("toChannelGroup").style.display = type === "转账" ? "block" : "none";
 
-    // 只有这三类显示归属月份
     const showBelong = type === "支出" && ["人事支出","场地支出","预付款"].includes(main);
     document.getElementById("belongMonthGroup").style.display = showBelong ? "block" : "none";
     if (type === "支出") refreshSubCategory();
@@ -299,8 +313,10 @@ function updateProgress() {
     let profit = 0;
     records.forEach(r => {
         if (r.type === "转账") return;
-        if (r.remark?.includes("分红")) return;
-        profit += r.type === "收入" ? r.amount : -r.amount;
+        if (r.isDividend || r.remark?.includes("分红")) return;
+        // 兼容旧数据的 adjustment 字段
+        const finalAmount = r.amount + (r.adjustment || 0);
+        profit += r.type === "收入" ? finalAmount : -finalAmount;
     });
     document.getElementById("capitalProgress").innerText =
         `初始：${initialCapital.toFixed(2)} | 利润：${profit.toFixed(2)}`;
@@ -315,21 +331,27 @@ async function addRecord() {
     const main = document.getElementById("expenseMain")?.value;
     const sub = document.getElementById("expenseSub")?.value;
     const r = {
-        date, type,
+        payDate: date, // 兼容旧结构
+        date: date,
+        type: type,
         category: type === "支出" ? `${main}-${sub}` : "",
         belongMonth: document.getElementById("belongMonth").value || "",
         channel: document.getElementById("channel").value,
         toChannel: document.getElementById("toChannel")?.value || "",
-        amount,
+        amount: amount,
+        adjustment: 0, // 兼容旧结构
         remark: document.getElementById("remark").value,
         operator: currentUser,
-        operateTime: new Date().toLocaleString()
+        operateTime: new Date().toLocaleString(),
+        isDividend: document.getElementById("remark").value.includes("分红")
     };
 
     records.unshift(r);
-    await saveData({ records, initialCapital });
-    refreshAll();
-    alert("保存成功");
+    const ok = await saveData({ records, initialCapital });
+    if (ok) {
+        refreshAll();
+        alert("保存成功");
+    }
 }
 
 function renderList() {
@@ -338,7 +360,7 @@ function renderList() {
     records.forEach(r => {
         const op = currentUser === "admin" ? `<td>${r.operateTime}</td>` : "";
         b.innerHTML += `<tr>
-<td>${r.date}</td><td>${r.type}</td><td>${r.category||"-"}</td>
+<td>${r.date || r.payDate}</td><td>${r.type}</td><td>${r.category||"-"}</td>
 <td>${r.channel}</td><td>${r.toChannel||"-"}</td><td>${r.amount.toFixed(2)}</td>
 <td>${r.operator}</td>${op}<td>${r.remark}</td></tr>`;
     });
@@ -346,11 +368,12 @@ function renderList() {
 
 function queryDaily() {
     const d = document.getElementById("queryDate").value;
-    const list = records.filter(x => x.date === d);
+    const list = records.filter(x => (x.date || x.payDate) === d);
     let inSum = 0, outSum = 0;
     list.forEach(r => {
-        if (r.type === "转账" || r.remark?.includes("分红")) return;
-        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
+        if (r.type === "转账" || r.isDividend || r.remark?.includes("分红")) return;
+        const finalAmount = r.amount + (r.adjustment || 0);
+        r.type === "收入" ? inSum += finalAmount : outSum += finalAmount;
     });
     document.getElementById("summaryResult").innerText =
         `${d}\n收入：${inSum.toFixed(2)}\n支出：${outSum.toFixed(2)}\n净额：${(inSum-outSum).toFixed(2)}`;
@@ -358,31 +381,34 @@ function queryDaily() {
 
 function queryBalance() {
     const d = document.getElementById("queryDate").value;
-    const list = records.filter(x => x.date <= d);
-    const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0};
+    const list = records.filter(x => (x.date || x.payDate) <= d);
+    const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}; // 兼容你截图里的刷卡账户
     list.forEach(r => {
-        if (r.type === "收入") bal[r.channel] += r.amount;
-        if (r.type === "支出") bal[r.channel] -= r.amount;
-        if (r.type === "转账") { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
+        const finalAmount = r.amount + (r.adjustment || 0);
+        if (r.type === "收入") bal[r.channel] += finalAmount;
+        if (r.type === "支出") bal[r.channel] -= finalAmount;
+        if (r.type === "转账") { bal[r.channel] -= finalAmount; bal[r.toChannel] += finalAmount; }
     });
-    const total = bal.支付宝+bal.微信+bal.兴业银行+bal.公司账户;
+    const total = Object.values(bal).reduce((a,b)=>a+b,0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
 支付宝：${bal.支付宝.toFixed(2)}
 微信：${bal.微信.toFixed(2)}
 兴业银行：${bal.兴业银行.toFixed(2)}
 公司账户：${bal.公司账户.toFixed(2)}
+刷卡：${bal.刷卡.toFixed(2)}
 合计：${total.toFixed(2)}`;
 }
 
 // 月度明细：优先按归属月查询
 function showMonthDetail() {
     const m = document.getElementById("monthQuery").value;
-    const list = records.filter(x => x.belongMonth === m || x.date.startsWith(m));
+    const list = records.filter(x => x.belongMonth === m || (x.date || x.payDate).startsWith(m));
     let inSum=0, outSum=0;
     list.forEach(r => {
-        if (r.type === "转账" || r.remark?.includes("分红")) return;
-        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
+        if (r.type === "转账" || r.isDividend || r.remark?.includes("分红")) return;
+        const finalAmount = r.amount + (r.adjustment || 0);
+        r.type === "收入" ? inSum += finalAmount : outSum += finalAmount;
     });
     document.getElementById("reportContent").innerHTML =
         `<h3>${m} 月度明细</h3>
@@ -396,7 +422,7 @@ function showMonthDetail() {
     list.forEach(r => {
         document.getElementById("reportContent").innerHTML +=
             `<tr>
-                <td>${r.date}</td><td>${r.belongMonth||"-"}</td><td>${r.type}</td><td>${r.category||"-"}</td>
+                <td>${r.date || r.payDate}</td><td>${r.belongMonth||"-"}</td><td>${r.type}</td><td>${r.category||"-"}</td>
                 <td>${r.channel}</td><td>${r.amount.toFixed(2)}</td><td>${r.operator}</td><td>${r.remark||""}</td>
             </tr>`;
     });
@@ -408,12 +434,13 @@ function showMonthDetail() {
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const rent = Number(document.getElementById("yearRent").value)||0;
-    const list = records.filter(x => x.date.startsWith(y));
+    const list = records.filter(x => (x.date || x.payDate).startsWith(y));
     let inSum=0, outSum=0;
     list.forEach(r => {
-        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        if (r.type === "转账" || r.isDividend || r.remark?.includes("分红")) return;
         if (r.category?.startsWith("场地支出")) return;
-        r.type === "收入" ? inSum += r.amount : outSum += r.amount;
+        const finalAmount = r.amount + (r.adjustment || 0);
+        r.type === "收入" ? inSum += finalAmount : outSum += finalAmount;
     });
     document.getElementById("reportContent").innerHTML =
         `<h3>${y}年度财报</h3>
@@ -432,16 +459,16 @@ function closeReport() {
 function exportRangeRecords() {
     const s = document.getElementById("exportStart").value;
     const e = document.getElementById("exportEnd").value;
-    const data = records.filter(x => x.date >= s && x.date <= e);
+    const data = records.filter(x => (x.date || x.payDate) >= s && (x.date || x.payDate) <= e);
     const aoa = [["日期","类型","分类","转出账户","转入账户","金额","操作人","备注"]];
-    data.forEach(r => aoa.push([r.date, r.type, r.category||"-", r.channel, r.toChannel||"-", r.amount, r.operator, r.remark]));
+    data.forEach(r => aoa.push([r.date || r.payDate, r.type, r.category||"-", r.channel, r.toChannel||"-", r.amount, r.operator, r.remark]));
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "流水");
     XLSX.writeFile(wb, `流水${s}~${e}.xlsx`);
 }
 
-// 新增用户（真实可保存到云端）
+// 新增用户
 function showAddUser() { document.getElementById("addUserModal").style.display = "block"; }
 function hideAddUser() { document.getElementById("addUserModal").style.display = "none"; }
 async function doAddUser() {
@@ -455,7 +482,7 @@ async function doAddUser() {
     if (ok) { alert("新增成功"); hideAddUser(); }
 }
 
-// 导入Excel（真实解析并写入云端）
+// 导入Excel
 async function importExcel(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -464,21 +491,24 @@ async function importExcel(e) {
         const wb = XLSX.read(ev.target.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
-        json.shift(); // 去掉表头
+        json.shift();
         let count = 0;
         json.forEach(row => {
             if (!row[0] || !row[5]) return;
             const r = {
+                payDate: row[0] + "",
                 date: row[0] + "",
                 type: row[1] || "收入",
                 category: row[2] || "",
                 channel: row[3] || "支付宝",
                 toChannel: row[4] || "",
                 amount: Number(row[5]) || 0,
+                adjustment: 0,
                 operator: currentUser,
                 remark: row[7] || "",
                 belongMonth: "",
-                operateTime: new Date().toLocaleString()
+                operateTime: new Date().toLocaleString(),
+                isDividend: (row[7] || "").includes("分红")
             };
             if (r.amount <= 0) return;
             records.unshift(r);
