@@ -35,6 +35,7 @@ th{background:#f8f9fa}
 .pagination{margin:15px 0; display:flex; gap:10px; align-items:center}
 .pagination input{width:80px}
 
+/* 回本进度条样式 */
 .progress-container {
   width: 100%;
   background-color: #e0e0e0;
@@ -263,6 +264,7 @@ function refreshForm() {
     if (type === "支出") refreshSubCategory();
 }
 
+// 🔥 新初始投入：2025-12-31 前所有支出（纯计算，不存BIN）
 function getInitialInvestment() {
   let sum = 0;
   records.forEach(r => {
@@ -274,15 +276,22 @@ function getInitialInvestment() {
   return sum;
 }
 
+// 🔥 回本进度条：残值 + 2025年底前总支出，利润=2026-01-01后运营收支（不含初始投入）
 function updateProgressBar() {
+  // 1. 计算初始投入（2025-12-31前，仅统计成本，不计入利润）
+  const initExpense = getInitialInvestment();
+  // 2. 计算总回本目标：残值 + 初始投入
+  const totalTarget = residualValue + initExpense;
+  // 3. 计算当期利润：仅2026-01-01之后的运营收支，完全排除初始投入
   let profit = 0;
   records.forEach(r => {
     if (r.type === "转账" || r.remark?.includes("分红")) return;
-    profit += r.type === "收入" ? r.amount : -r.amount;
+    // 核心修改：只统计2026-01-01及之后的收支，2025-12-31前的初始投入不计入利润
+    if (r.date > "2025-12-31") {
+      profit += r.type === "收入" ? r.amount : -r.amount;
+    }
   });
-
-  const initExpense = getInitialInvestment();
-  const totalTarget = residualValue + initExpense;
+  // 4. 计算回本进度
   let pct = 0;
   if (totalTarget > 0) {
     pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
@@ -298,42 +307,57 @@ function showCategoryGuide() {
     const html = `
 <h3>一、分类体系及使用说明</h3>
 <p>核心说明：本说明用于解决实际运营中“支出不知归哪类”的问题，每类均明确「核心定义+适用场景+判断技巧」，无需复杂分析，对照支出项目特征即可快速归类，确保分类统一、无遗漏、无混淆。</p>
+
 <h4>（一）人事支出</h4>
+<p>核心定义：与企业员工直接相关的各类支出，聚焦“人”的成本与福利。</p>
 <p>• 人事支出-薪资-基本薪酬：员工固定工资、工资差额补付</p>
 <p>• 人事支出-团建-日常活动：员工集体活动、聚餐、迎新宴</p>
 <p>• 人事支出-培训：员工学习、培训相关支出</p>
 <p>• 人事支出-招聘：招聘员工产生的费用</p>
 <p>• 人事支出-其他-福利/补贴：员工非薪资类福利、补贴</p>
+
 <h4>（二）市场支出</h4>
+<p>核心定义：为推广企业、获取客户、提升品牌曝光产生的各类支出。</p>
 <p>• 市场支出-网络：美团、抖音等网络平台推广</p>
 <p>• 市场支出-渠道：非网络合作引流</p>
 <p>• 市场支出-地推：线下地推活动</p>
 <p>• 市场支出-物资制作：宣传海报、活动材料</p>
+
 <h4>（三）行政支出</h4>
+<p>核心定义：企业日常行政办公、后勤保障、物品维护。</p>
 <p>• 行政支出-物资-耐用办公品：电视机、桌子、灯具等</p>
 <p>• 行政支出-物资-办公耗材：耗材、线材、易损品</p>
 <p>• 行政支出-其他-物品修缮：维修、修补</p>
 <p>• 行政支出-其他-通讯费用：固话、工作手机报销</p>
 <p>• 行政支出-后勤费用：保洁、网络、宽带、搬家</p>
 <p>• 行政支出-其他-服务费用：工商、设计、刻章、平账</p>
+
 <h4>（四）管理支出</h4>
+<p>核心定义：企业管理、教学相关、小程序运营。</p>
 <p>• 管理支出-管理费：管理部门运营成本</p>
 <p>• 管理支出-独立采购及教学活动：教学资料、书籍、活动</p>
 <p>• 管理支出-教研相关：教研服务、教研活动</p>
 <p>• 管理支出-小程序相关：小程序开发、维护、千牛云</p>
+
 <h4>（五）场地支出</h4>
+<p>核心定义：经营场地相关租金、后勤、修缮。</p>
 <p>• 场地支出-场地租金：房租</p>
 <p>• 场地支出-后勤费用：物业费、水电</p>
 <p>• 场地支出-场地修缮：装修、改造、硬件维修</p>
+
 <h4>（六）财务支出</h4>
+<p>核心定义：税费、退费。</p>
 <p>• 财务支出-各项税费：社保税费等</p>
 <p>• 财务支出-退费支出：学员退费、美团退费等</p>
+
 <h4>（七）开业筹备支出</h4>
 <p>• 开业筹备-场地：开业前装修、押金</p>
 <p>• 开业筹备-物资：开业前玩具、礼品</p>
 <p>• 开业筹备-其他：开工红包、安装费</p>
+
 <h4>（八）预付款</h4>
 <p>• 预付款-场地：押金、定金、预付租金物业费</p>
+
 <h4>（九）其他支出</h4>
 <p>无法归类的兜底支出。</p>
     `;
@@ -348,8 +372,10 @@ async function loadData() {
     try {
         let res = await fetch(DATA_BIN_URL, { headers: { "X-Master-Key": API_KEY } });
         let data = await res.json();
+        let loadedRecords = data.record?.records || [];
+
         return {
-            records: data.record?.records || [],
+            records: loadedRecords.map(r => ({ ...r, date: r.date || r.payDate })),
             residualValue: data.record?.residualValue || 0
         };
     } catch (e) {
@@ -594,6 +620,7 @@ function showMonthDetail() {
         <p>利润率：${income>0 ? ((income-expense)/income*100).toFixed(1)+'%' : '—'}</p>
     </div>
 </div>
+
 <h4>支出大类占比</h4>
 <table class="report-table">
 <tr><th>大类</th><th>金额</th><th>占当月支出比</th></tr>`;
@@ -680,6 +707,7 @@ function genYearReport() {
         <p>年度利润率：${yearMargin}%</p>
     </div>
 </div>
+
 <h4>月度收支概览</h4>
 <table class="report-table">
 <tr><th>月份</th><th>收入</th><th>支出</th><th>净利</th><th>利润率</th></tr>`;
