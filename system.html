@@ -565,24 +565,27 @@ function queryDaily() {
         `${d}\n收入：${inSum.toFixed(2)}\n支出：${outSum.toFixed(2)}\n净额：${(inSum - outSum).toFixed(2)}`;
 }
 
+// 🔧 彻底修复：排除2025年投入 + 杜绝NaN
 function queryBalance() {
     const d = document.getElementById("queryDate").value;
-    const list = records.filter(x => x.date <= d);
+    // 核心修改：只统计2026-01-01及之后的流水，完全排除2025年底前的初始投入
+    const list = records.filter(x => x.date <= d && x.date >= "2026-01-01");
     const bal = {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0};
     list.forEach(r => {
         if (r.type === "收入") bal[r.toChannel || r.channel] += r.amount;
         if (r.type === "支出") bal[r.channel] -= r.amount;
         if (r.type === "转账") { bal[r.channel] -= r.amount; bal[r.toChannel] += r.amount; }
     });
-    const total = Object.values(bal).reduce((a,b)=>a+b,0);
+    // 核心修复：给每个账户余额加兜底0，彻底杜绝NaN
+    const total = Object.values(bal).reduce((a,b) => a + (Number(b) || 0), 0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
-支付宝：${bal.支付宝.toFixed(2)}
-微信：${bal.微信.toFixed(2)}
-兴业银行：${bal.兴业银行.toFixed(2)}
-公司账户：${bal.公司账户.toFixed(2)}
-刷卡：${bal.刷卡.toFixed(2)}
-合计：${total.toFixed(2)}`;
+支付宝：${(bal.支付宝 || 0).toFixed(2)}
+微信：${(bal.微信 || 0).toFixed(2)}
+兴业银行：${(bal.兴业银行 || 0).toFixed(2)}
+公司账户：${(bal.公司账户 || 0).toFixed(2)}
+刷卡：${(bal.刷卡 || 0).toFixed(2)}
+合计：${(total || 0).toFixed(2)}`;
 }
 
 function showMonthDetail() {
