@@ -274,42 +274,36 @@ function refreshForm() {
 }
 
 // 🔴 核心修复：按选择的年份统计总投入
-function getInitialInvestment() {
-  let sum = 0;
-  records.forEach(r => {
-    if (r.type !== "支出") return;
-    if (r.date <= "2025-12-31") {
-      sum += r.amount;
-    }
-  });
-  return sum;
+function getYearTotalExpense(year) {
+    let sum = 0;
+    records.forEach(r => {
+        if (r.type !== "支出") return;
+        // 统计逻辑：优先按归属月份，无归属按日期年份
+        const rYear = r.belongMonth ? r.belongMonth.substring(0,4) : r.date.substring(0,4);
+        if (rYear === year) sum += r.amount;
+    });
+    return sum;
 }
 
-// 新版本进度条：只和 2025年底前支出挂钩
 function updateProgressBar() {
-  // 1. 初始投入：2025-12-31 前所有支出
-  const initialExpense = getInitialInvestment();
+    const statYear = document.getElementById("statYear").value;
+    let profit = 0;
+    records.forEach(r => {
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        profit += r.type === "收入" ? r.amount : -r.amount;
+    });
 
-  // 2. 总利润：全量收入 - 全量支出
-  let profit = 0;
-  records.forEach(r => {
-    if (r.type === "转账" || r.remark?.includes("分红")) return;
-    profit += r.type === "收入" ? r.amount : -r.amount;
-  });
+    const yearExpense = getYearTotalExpense(statYear);
+    const totalTarget = residualValue + yearExpense;
+    let pct = 0;
+    if (totalTarget > 0) {
+        pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
+    }
 
-  // 3. 回本目标 = 公司残值 + 2025年底前总投入
-  const totalTarget = residualValue + initialExpense;
-
-  // 4. 进度
-  let pct = 0;
-  if (totalTarget > 0) {
-    pct = Math.min(100, Math.max(0, (profit / totalTarget) * 100));
-  }
-
-  document.getElementById("progressText").innerText =
-    `公司残值：${residualValue.toFixed(2)} | 2025年底前总投入：${initialExpense.toFixed(2)} | 回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
-  document.getElementById("progressBar").style.width = pct + "%";
-  document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
+    document.getElementById("progressText").innerText =
+        `公司残值：${residualValue.toFixed(2)} | ${statYear}总投入：${yearExpense.toFixed(2)} | 总回本目标：${totalTarget.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
+    document.getElementById("progressBar").style.width = pct + "%";
+    document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
 }
 
 function showCategoryGuide() {
