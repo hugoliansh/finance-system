@@ -368,19 +368,34 @@ function closeCategoryGuide() {
     document.getElementById("categoryModal").style.display = "none";
 }
 
+// 🔧 修复后的数据加载函数（仅修改此函数，其他完全保留）
 async function loadData() {
     try {
-        let res = await fetch(DATA_BIN_URL, { headers: { "X-Master-Key": API_KEY } });
+        // 1. 强制禁用缓存，确保每次拉取最新数据
+        let res = await fetch(DATA_BIN_URL, { 
+            headers: { "X-Master-Key": API_KEY, "Cache-Control": "no-cache" },
+            cache: "no-store"
+        });
+        if (!res.ok) throw new Error(`HTTP错误: ${res.status}`);
+        
         let data = await res.json();
-        let loadedRecords = data.record?.records || [];
+        console.log("加载到的BIN数据:", data); // 控制台日志，方便排查
+        
+        // 2. 多层兜底，确保records和residualValue永远有值
+        let loadedRecords = data?.record?.records || data?.records || [];
+        let loadedResidual = data?.record?.residualValue || data?.residualValue || 0;
 
         return {
             records: loadedRecords.map(r => ({ ...r, date: r.date || r.payDate })),
-            residualValue: data.record?.residualValue || 0
+            residualValue: Number(loadedResidual) || 0
         };
     } catch (e) {
-        console.error(e);
-        return { records: [], residualValue: 0 };
+        console.error("数据加载失败，使用本地缓存兜底:", e);
+        // 3. 极端情况兜底：加载失败时返回本地已有数据，避免归零
+        return {
+            records: records || [],
+            residualValue: residualValue || 0
+        };
     }
 }
 
