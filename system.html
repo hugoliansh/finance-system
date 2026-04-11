@@ -496,7 +496,7 @@ function queryBalance(){
     const bal = {
         支付宝: initialBalance.支付宝 || 0,
         微信: initialBalance.微信 || 0,
-       兴业银行: initialBalance.兴业银行 || 0,
+        兴业银行: initialBalance.兴业银行 || 0,
         公司账户: initialBalance.公司账户 || 0,
         刷卡: initialBalance.刷卡 || 0
     };
@@ -599,13 +599,16 @@ function showMonthCategoryDetail(month, mainCat){
     document.getElementById("detailModal").style.display = "block";
 }
 
+// ==============================================
+// ✅ 终极极简年报算法：彻底绕开所有复杂逻辑
+// ==============================================
 function genYearReport() {
     const targetYear = document.getElementById("yearInput").value.trim();
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
 
     if (!targetYear) { alert("请输入年份"); return; }
 
-    // 1. 先筛选：归属当年、非转账、非分红
+    // 1. 第一步筛选：只留归属当年、非转账、非分红
     const validList = records.filter(r => {
         if (r.type === '转账' || r.remark?.includes('分红')) return false;
         if (r.belongMonth) {
@@ -614,7 +617,7 @@ function genYearReport() {
         return r.date.startsWith(targetYear + '-');
     });
 
-    // 2. 统计收入 & 支出
+    // 2. 统计收入 & 支出（核心：预付款大类100%不计入成本）
     let yearIncome = 0;
     const categoryTotal = {};
     mainCategories.forEach(cat => { categoryTotal[cat] = 0; });
@@ -626,12 +629,10 @@ function genYearReport() {
             return;
         }
 
-        // ==============================================
-        // ✅ 关键：只有【预付款-场地租金】不计入成本
-        // ==============================================
-        const [mainCat, subCat] = (r.category || '').split('-');
-        if (mainCat === '预付款' && subCat === '场地租金') {
-            return; // 不计入
+        // ✅ 关键：预付款大类，完全不计入年度成本
+        const [mainCat] = (r.category || '').split('-');
+        if (mainCat === '预付款') {
+            return; // 直接跳过，不统计
         }
 
         // 其他所有支出正常计入
@@ -640,28 +641,30 @@ function genYearReport() {
         }
     });
 
-    // 流水总支出（已剔除预付款里的场地租金）
-    const totalExpense = mainCategories.reduce((sum, cat) => sum + categoryTotal[cat], 0);
+    // 3. 流水总支出（已完全剔除预付款）
+    const totalExpense = mainCategories.reduce(
+        (sum, cat) => sum + categoryTotal[cat], 0
+    );
 
-    // 计提租金：按月数计算
+    // 4. 计提租金：按当年已过月份 × 月均租金
     const today = new Date();
     const isCurrentYear = today.getFullYear() === parseInt(targetYear);
     const monthCount = isCurrentYear ? today.getMonth() + 1 : 12;
-   const monthlyRent = totalYearRent / 12;
+    const monthlyRent = totalYearRent / 12;
     const accruedRent = monthlyRent * monthCount;
 
-    // 最终成本 & 利润
+    // 5. 最终成本 & 利润
     const totalCost = totalExpense + accruedRent;
     const yearProfit = yearIncome - totalCost;
     const profitMargin = yearIncome > 0 ? ((yearProfit / yearIncome) * 100).toFixed(1) : '—';
 
-    // 页面展示
+    // 6. 页面展示
     let html = `
     <h3>${targetYear} 年度经营分析</h3>
     <div class="year-overview">
         <div class="overview-card">
             <p>总收入：${yearIncome.toFixed(2)}</p>
-            <p>流水总支出（已剔除预付租金）：${totalExpense.toFixed(2)}</p>
+            <p>流水总支出（已剔除预付款）：${totalExpense.toFixed(2)}</p>
             <p>全年合同租金：${totalYearRent.toFixed(2)}</p>
             <p>已过月份：${monthCount} 个月</p>
             <p>本期计提租金成本：${accruedRent.toFixed(2)}</p>
@@ -671,7 +674,7 @@ function genYearReport() {
         </div>
     </div>
 
-    <h4>支出分类明细</h4>
+    <h4>支出分类明细（不含预付款）</h4>
     <table class="report-table">
     <tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
@@ -709,7 +712,7 @@ function genYearReport() {
         });
     }, 100);
 }
-  
+
 function showYearCategoryDetail(year, mainCat){
     const list = records.filter(r=>{
         if(r.type!=="支出") return false;
