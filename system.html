@@ -7,36 +7,46 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-body{font-family:Arial;margin:20px;background:#f5f7fa}
-.container{max-width:1300px;margin:0 auto;background:white;padding:20px;border-radius:8px;box-shadow:0 0 20px rgba(0,0,0,0.1)}
-h1,h2,h3,h4{color:#333}
-.form-group{margin:15px 0}
-label{display:inline-block;width:120px;font-weight:bold}
-input,select{padding:8px;width:220px;border:1px solid #ddd;border-radius:4px}
-button{padding:8px 16px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:5px}
+body{font-family:Arial;margin:10px;background:#f5f7fa}
+.container{max-width:100%;margin:0 auto;background:white;padding:15px;border-radius:8px;box-shadow:0 0 20px rgba(0,0,0,0.1);overflow-x:auto}
+h1,h2,h3,h4{color:#333;font-size:clamp(1.2rem,4vw,1.8rem)}
+.form-group{margin:12px 0;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+label{display:inline-block;width:clamp(100px,25vw,120px);font-weight:bold;font-size:clamp(0.9rem,3vw,1rem)}
+input,select{padding:8px;width:clamp(180px,50vw,220px);border:1px solid #ddd;border-radius:4px;font-size:clamp(0.9rem,3vw,1rem)}
+button{padding:8px 12px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;margin-right:5px;margin-bottom:5px;font-size:clamp(0.9rem,3vw,1rem)}
 button:hover{background:#0056b3}
-table{width:100%;border-collapse:collapse;margin-top:20px}
-th,td{padding:10px;border:1px solid #ddd;text-align:left}
+table{width:100%;border-collapse:collapse;margin-top:20px;min-width:600px}
+th,td{padding:8px;border:1px solid #ddd;text-align:left;font-size:clamp(0.8rem,2.5vw,0.95rem)}
 th{background:#f8f9fa}
-.summary{background:#e9f7ef;padding:15px;border-radius:4px;margin:20px 0;white-space:pre-line}
-.top-report{position:absolute;top:80px;right:20px;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.user-info{text-align:right;margin-bottom:60px}
+.summary{background:#e9f7ef;padding:12px;border-radius:4px;margin:15px 0;white-space:pre-line;font-size:clamp(0.9rem,3vw,1rem)}
+.top-report{position:static;margin:15px 0;background:white;padding:15px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.user-info{text-align:right;margin-bottom:15px;font-size:clamp(0.9rem,3vw,1rem)}
 .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999}
-.modal-body{width:90%;max-width:1200px;background:white;margin:5% auto;padding:20px;border-radius:10px;overflow:auto;max-height:85vh}
-.report-table th,.report-table td{border:1px solid #ddd;padding:8px;text-align:left}
+.modal-body{width:95%;max-width:1200px;background:white;margin:5% auto;padding:15px;border-radius:10px;overflow:auto;max-height:85vh}
+.report-table th,.report-table td{border:1px solid #ddd;padding:6px;text-align:left;font-size:clamp(0.8rem,2.5vw,0.95rem)}
 .report-table th{background:#f0f0f0;font-weight:bold}
-.chart-box{margin:30px 0;text-align:center}
-.chart-box canvas{max-height:400px;max-width:800px;margin:0 auto}
-.year-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:20px 0}
-.overview-card{background:#f8f9fa;padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-.overview-card h4{margin-top:0;margin-bottom:10px}
-.overview-card p{margin:4px 0;font-size:14px}
-.pagination{margin:15px 0;display:flex;gap:10px;align-items:center}
-.pagination input{width:80px}
+.chart-box{margin:20px 0;text-align:center}
+.chart-box canvas{max-height:300px;max-width:90%;margin:0 auto}
+.year-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:15px 0}
+.overview-card{background:#f8f9fa;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+.overview-card h4{margin-top:0;margin-bottom:8px;font-size:clamp(1rem,3vw,1.2rem)}
+.overview-card p{margin:4px 0;font-size:clamp(0.9rem,3vw,1rem)}
+.pagination{margin:12px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pagination input{width:clamp(60px,20vw,80px)}
 
 .progress-container{width:100%;background:#e0e0e0;border-radius:10px;margin:10px 0;overflow:hidden;height:28px}
-.progress-bar{height:100%;background:#4bc0c0;text-align:center;color:white;font-weight:bold}
-.progress-text{font-size:14px;margin-bottom:6px}
+.progress-bar{height:100%;background:#4bc0c0;text-align:center;color:white;font-weight:bold;font-size:clamp(0.9rem,3vw,1rem)}
+.progress-text{font-size:clamp(0.9rem,3vw,1rem);margin-bottom:6px}
+
+@media (max-width: 768px) {
+    .form-group{flex-direction:column;align-items:flex-start}
+    label{width:100%}
+    input,select{width:100%}
+    .top-report{position:static;margin:10px 0}
+    table{min-width:unset}
+    th,td{padding:6px;font-size:0.8rem}
+    .year-overview{grid-template-columns:1fr 1fr}
+}
 </style>
 </head>
 <body>
@@ -215,21 +225,27 @@ function refreshForm() {
     if(t==="支出") refreshSubCategory();
 }
 
+// ✅ 修复：按归属月统计2025年底投入
 function getInitialInvestment(){
     let sum=0;
     records.forEach(r=>{
         if(r.type!=="支出") return;
-        if(r.date<="2025-12-31") sum+=r.amount;
+        const year = r.belongMonth ? r.belongMonth.substring(0,4) : r.date.substring(0,4);
+        if(year === "2025") sum += r.amount;
     });
     return sum;
 }
 
+// ✅ 修复：按归属月统计2026年利润
 function getCurrentProfit(){
     let profit = 0;
     records.forEach(r => {
-        if (r.date < "2026-01-01") return;
         if (r.type === "转账") return;
         if (r.remark?.includes("分红")) return;
+        
+        const year = r.belongMonth ? r.belongMonth.substring(0,4) : r.date.substring(0,4);
+        if(year !== "2026") return;
+        
         if (r.type === "收入") profit += r.amount;
         if (r.type === "支出") profit -= r.amount;
     });
@@ -293,7 +309,7 @@ async function getUsers(){
     try{
         let res=await fetch(USER_BIN_URL,{headers:{"X-Master-Key":API_KEY}});
         return (await res.json()).record||{admin:"admin123"};
-    }catch(e){return {admin:"admin123"}};
+    }catch(e){return {admin:"admin123"}}
 }
 
 window.onload=async()=>{
@@ -417,9 +433,6 @@ function queryBalance(){
 合计：${total.toFixed(2)}`;
 }
 
-// ======================
-// 月报
-// ======================
 function showMonthDetail() {
     const m = document.getElementById("monthQuery").value;
     if (!m) { alert("请选择月份"); return; }
@@ -480,9 +493,6 @@ function showMonthDetail() {
     document.getElementById("reportModal").style.display = "block";
 }
 
-// ======================
-// 年报
-// ======================
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const rentInput = Number(document.getElementById("yearRent").value) || 0;
