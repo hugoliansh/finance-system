@@ -175,6 +175,7 @@ const USER_BIN_URL = `https://api.jsonbin.io/v3/b/${USER_BIN_ID}/latest`;
 let currentUser = localStorage.getItem("user");
 let records = [];
 let residualValue = 0;
+let initialBalance = { 支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0 };
 let page = 1;
 const pageSize = 50;
 
@@ -190,6 +191,12 @@ const expenseCategories = {
     "其他支出":["无分类"]
 };
 const mainCategories = Object.keys(expenseCategories);
+
+function fixAccount(acc) {
+    if (acc === "公司") return "公司账户";
+    if (acc === "公司银行") return "公司账户";
+    return acc;
+}
 
 function refreshForm() {
     const t = document.getElementById("recordType").value;
@@ -221,10 +228,8 @@ function getCurrentProfit(){
     let profit = 0;
     records.forEach(r => {
         if (r.date < "2026-01-01") return;
-        
         if (r.type === "转账") return;
         if (r.remark?.includes("分红")) return;
-        
         if (r.type === "收入") profit += r.amount;
         if (r.type === "支出") profit -= r.amount;
     });
@@ -263,10 +268,15 @@ async function loadData(){
         let data=await res.json();
         return {
             records:(data.record?.records||[]).map(r=>({...r,date:r.date||r.payDate})),
-            residualValue:data.record?.residualValue||0
+            residualValue:data.record?.residualValue||0,
+            initialBalance:data.record?.initialBalance || {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}
         };
     }catch(e){
-        return {records:[],residualValue:0};
+        return {
+            records:[],
+            residualValue:0,
+            initialBalance:{支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}
+        };
     }
 }
 
@@ -304,6 +314,7 @@ window.onload=async()=>{
     const cloud=await loadData();
     records=cloud.records||[];
     residualValue=cloud.residualValue||0;
+    initialBalance=cloud.initialBalance || {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0};
     refreshAll();
 };
 
@@ -314,7 +325,7 @@ async function showEditResidual(){
     const v=prompt("修改公司残值",residualValue);
     if(v==null)return;
     residualValue=Number(v)||0;
-    await saveData({records,residualValue});
+    await saveData({records,residualValue,initialBalance});
     refreshAll();
 }
 
@@ -333,7 +344,7 @@ async function addRecord(){
         operator:currentUser,operateTime:new Date().toLocaleString()
     };
     records.unshift(r);
-    await saveData({records,residualValue});
+    await saveData({records,residualValue,initialBalance});
     refreshAll();
     alert("保存成功");
 }
@@ -374,50 +385,40 @@ function queryDaily(){
         `${d}\n收入：${inSum.toFixed(2)}\n支出：${outSum.toFixed(2)}\n净额：${(inSum-outSum).toFixed(2)}`;
 }
 
-// ✅ 当日账户余额：按选择日期截止结算，包含转账，只算2026后，最新日期合计 = 当前利润
 function queryBalance(){
     const d = document.getElementById("queryDate").value;
     if(!d){alert("请选择查询日期");return;}
-
-    // 只计算 2026-01-01 以后，且 <= 查询日期的流水
     const list = records.filter(x => x.date >= "2026-01-01" && x.date <= d);
 
     const bal = {
-  支付宝: initialBalance.支付宝 || 0,
-  微信: initialBalance.微信 || 0,
-  兴业银行: initialBalance.兴业银行 || 0,
-  公司账户: initialBalance.公司账户 || 0,
-  刷卡: initialBalance.刷卡 || 0
-};
+        支付宝: initialBalance.支付宝 || 0,
+        微信: initialBalance.微信 || 0,
+        兴业银行: initialBalance.兴业银行 || 0,
+        公司账户: initialBalance.公司账户 || 0,
+        刷卡: initialBalance.刷卡 || 0
+    };
     
     list.forEach(r => {
-        if (r.type === "收入") {
-            bal[r.toChannel || r.channel] += r.amount;
-        }
-        if (r.type === "支出") {
-            bal[r.channel] -= r.amount;
-        }
-        if (r.type === "转账") {
-            bal[r.channel] -= r.amount;
-            bal[r.toChannel] += r.amount;
-        }
+        let to = fixAccount(r.toChannel || r.channel);
+        let fr = fixAccount(r.channel);
+        if (r.type === "收入") { bal[to] += r.amount; }
+        if (r.type === "支出") { bal[fr] -= r.amount; }
+        if (r.type === "转账") { bal[fr] -= r.amount; bal[to] += r.amount; }
     });
 
-    // 总额 = 所有账户相加（天然 = 利润）
-    const total = Object.values(bal).reduce((a, b) => a + (Number(b) || 0), 0);
-
+    const total = Object.values(bal).reduce((a,b)=>a+(Number(b)||0),0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
-支付宝：${(bal.支付宝 || 0).toFixed(2)}
-微信：${(bal.微信 || 0).toFixed(2)}
-兴业银行：${(bal.兴业银行 || 0).toFixed(2)}
-公司账户：${(bal.公司账户 || 0).toFixed(2)}
-刷卡：${(bal.刷卡 || 0).toFixed(2)}
+支付宝：${bal.支付宝.toFixed(2)}
+微信：${bal.微信.toFixed(2)}
+兴业银行：${bal.兴业银行.toFixed(2)}
+公司账户：${bal.公司账户.toFixed(2)}
+刷卡：${bal.刷卡.toFixed(2)}
 合计：${total.toFixed(2)}`;
 }
 
 // ======================
-// 【原版完整月报】100% 还原
+// 月报
 // ======================
 function showMonthDetail() {
     const m = document.getElementById("monthQuery").value;
@@ -480,7 +481,7 @@ function showMonthDetail() {
 }
 
 // ======================
-// 【原版完整年报】100% 还原（含图表、租金、月度概览）
+// 年报
 // ======================
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
@@ -624,7 +625,7 @@ async function importExcel(e){
                 operator:currentUser,operateTime:new Date().toLocaleString()
             });
         });
-        await saveData({records,residualValue});
+        await saveData({records,residualValue,initialBalance});
         refreshAll();
         alert("导入完成");
         document.getElementById("importFile").value="";
