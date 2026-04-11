@@ -600,7 +600,57 @@ function genYearReport() {
     },100);
 }
 function closeReport(){document.getElementById("reportModal").style.display="none";}
-function showCategoryGuide(){document.getElementById("categoryModal").style.display="block";}
+function showCategoryGuide(){
+  document.getElementById("categoryContent").innerHTML = `
+<strong>一、人事支出</strong><br>
+薪资-基本薪酬：员工基本工资、绩效工资<br>
+团建-日常活动：团队聚餐、团建活动费用<br>
+培训：员工内训、外训、学习资料<br>
+招聘：招聘平台费用、猎头费、面试成本<br>
+其他-福利/补贴：餐补、交通补贴、节日福利等<br><br>
+
+<strong>二、市场支出</strong><br>
+网络：线上推广、信息流、短视频广告<br>
+渠道：合作渠道佣金、渠道返点<br>
+地推：线下推广、传单、活动执行<br>
+物资制作：宣传物料、海报、展板制作<br><br>
+
+<strong>三、行政支出</strong><br>
+物资-耐用办公品：电脑、桌椅、家具等<br>
+物资-办公耗材：纸张、笔墨、打印耗材等<br>
+其他-物品修缮：设备维修、办公物品修理<br>
+其他-通讯费用：电话、网络套餐费用<br>
+后勤费用：饮水、清洁、物业相关<br>
+其他-服务费用：第三方服务、杂项服务费<br><br>
+
+<strong>四、管理支出</strong><br>
+管理费：公司整体运营管理费用<br>
+独立采购及教学活动：教学相关采购、活动支出<br>
+教研相关：教材研发、课件制作、教具采购<br>
+小程序相关：小程序开发、维护、服务费<br><br>
+
+<strong>五、场地支出</strong><br>
+场地租金：办公室、教室租金<br>
+后勤费用：场地水电、物业<br>
+场地修缮：装修、维修、改造费用<br><br>
+
+<strong>六、财务支出</strong><br>
+各项税费：增值税、所得税、附加税等<br>
+退费支出：学员退费、客户退款<br><br>
+
+<strong>七、开业筹备支出</strong><br>
+场地：前期选址、定金、装修<br>
+物资：开业所需家具、设备<br>
+其他：证照、杂项筹备费用<br><br>
+
+<strong>八、预付款</strong><br>
+场地：预付租金、装修预付款等<br><br>
+
+<strong>九、其他支出</strong><br>
+无分类：无法归入以上类别的杂项支出
+  `;
+  document.getElementById("categoryModal").style.display="block";
+}
 function closeCategoryGuide(){document.getElementById("categoryModal").style.display="none";}
 function showAddUser(){document.getElementById("addUserModal").style.display="block";}
 function hideAddUser(){document.getElementById("addUserModal").style.display="none";}
