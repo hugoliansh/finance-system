@@ -152,7 +152,7 @@ th{background:#f8f9fa}
         </select>
     </div>
     <div class="form-group"><label>金额：</label><input type="number" id="amount" step="0.01" required></div>
-    <div class="form-group"><label>备注：</label><input type="text" id="remark" placeholder="分红请填写：分红"></div>
+    <div class="form-group"><label>备注：</label><input type="text" id="remark"></div>
     <button onclick="addRecord()">保存</button>
 
     <h2>查询对账</h2>
@@ -525,7 +525,6 @@ function showMonthDetail() {
     );
     let income = 0, expense = 0;
     let mainSum = {};
-    let subSum = {};
     mainCategories.forEach(c => { mainSum[c] = 0; });
     list.forEach(r => {
         if (r.type === "转账" || r.remark?.includes("分红")) return;
@@ -534,10 +533,8 @@ function showMonthDetail() {
             income += amt;
         } else {
             expense += amt;
-            const full = r.category || "";
-            const [mc, sc] = full.split("-", 2);
+            const [mc] = (r.category||"").split("-");
             if (mc && mainSum[mc] !== undefined) mainSum[mc] += amt;
-            subSum[full] = (subSum[full] || 0) + amt;
         }
     });
     let html = `<h3>${m} 月度经营分析</h3>
@@ -551,16 +548,54 @@ function showMonthDetail() {
 </div>
 <h4>支出大类</h4>
 <table class="report-table">
-<tr><th>大类</th><th>金额</th><th>占比</th></tr>`;
+<tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
     mainCategories.forEach(c => {
         const val = mainSum[c];
         const p = expense > 0 ? (val/expense*100).toFixed(1) : 0;
-        html += `<tr><td>${c}</td><td>${val.toFixed(2)}</td><td>${p}%</td></tr>`;
+        html += `<tr><td>${c}</td><td>${val.toFixed(2)}</td><td>${p}%</td><td><button class="detail-btn" onclick="showMonthCategoryDetail('${m}','${c}')">查看流水</button></td></tr>`;
     });
     html += "</table>";
     document.getElementById("reportTitle").innerText = m+"月度";
     document.getElementById("reportContent").innerHTML = html;
     document.getElementById("reportModal").style.display = "block";
+}
+
+function showMonthCategoryDetail(month, mainCat){
+    const list = records.filter(r=>{
+        if(r.type!=="支出") return false;
+        const bm = r.belongMonth || r.date.substring(0,7);
+        if(bm !== month) return false;
+        const [mc] = (r.category||"").split("-");
+        return mc === mainCat;
+    });
+
+    let total = 0;
+    let html = `<h4>${month} · ${mainCat} 明细流水</h4>
+<table class="report-table">
+<tr><th>日期</th><th>归属月</th><th>小类</th><th>账户</th><th>金额</th><th>备注</th></tr>`;
+
+    list.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+        const [mc,sc] = (r.category||"-").split("-");
+        total += r.amount;
+        html+=`<tr>
+<td>${r.date}</td>
+<td>${r.belongMonth||""}</td>
+<td>${sc||"-"}</td>
+<td>${r.channel}</td>
+<td>${r.amount.toFixed(2)}</td>
+<td>${r.remark||""}</td>
+</tr>`;
+    });
+
+    html+=`<tr style="font-weight:bold">
+<td colspan="4">合计</td>
+<td>${total.toFixed(2)}</td>
+<td></td>
+</tr></table>`;
+
+    document.getElementById("detailTitle").innerText = `${month} ${mainCat} 明细`;
+    document.getElementById("detailContent").innerHTML = html;
+    document.getElementById("detailModal").style.display = "block";
 }
 
 function genYearReport() {
@@ -590,9 +625,18 @@ function genYearReport() {
             yearIncome+=amt;
         } else {
             const [mc,sc] = (r.category||"").split("-");
-            if(mc==="预付款" && sc==="场地租金") return;
-            yearExpense+=amt;
-            if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
+            // 核心修复：预付款排除场地租金，场地支出包含所有小类（含租金）
+            if(mc==="预付款"){
+                if(sc==="场地租金") return;
+                yearExpense+=amt;
+                yearCat[mc]+=amt;
+            } else if(mc==="场地支出"){
+                yearExpense+=amt;
+                yearCat[mc]+=amt;
+            } else {
+                yearExpense+=amt;
+                if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
+            }
         }
     });
 
