@@ -69,11 +69,12 @@ th{background:#f8f9fa}
     <h3>财务报表</h3>
     <div class="form-group">
         <label>月份：</label><input type="month" id="monthQuery" style="width:140px">
-        <button onclick="showMonthDetail()">月度明细</button>
+        <button onclick="showMonthDetail()">月度经营明细</button>
+        <button onclick="showMonthProfitCheck()" style="background:#e74c3c">月度利润对账</button>
     </div>
     <div class="form-group">
-        <label>年份：</label><input type="number" id="yearInput" placeholder="2025" style="width:70px" value="2025">
-        <input type="number" id="yearRent" placeholder="全年租金" style="width:120px">
+        <label>年份：</label><input type="number" id="yearInput" placeholder="2026" style="width:70px" value="2026">
+        <input type="number" id="yearRent" placeholder="全年总租金" style="width:120px">
         <button onclick="genYearReport()">年度财报</button>
     </div>
 </div>
@@ -144,7 +145,7 @@ th{background:#f8f9fa}
         </select>
     </div>
     <div class="form-group" id="toChannelGroup">
-        <label id="toChannelLabel">转入账户：</label>
+        <label id="channelLabel">转入：</label>
         <select id="toChannel">
             <option value="支付宝">支付宝</option><option value="微信">微信</option>
             <option value="兴业银行">兴业银行</option><option value="公司账户">公司账户</option>
@@ -598,49 +599,56 @@ function showMonthCategoryDetail(month, mainCat){
     document.getElementById("detailModal").style.display = "block";
 }
 
+// ✅ 核心修复：按归属月统计年报 + 租金按月计提
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
     if (!y) { alert("请输入年份"); return; }
 
+    // 1. 严格按归属月筛选：仅统计归属年为y，或无归属月但日期在y年的流水
     const list = records.filter(r => {
         if (r.type === "转账" || r.remark?.includes("分红")) return false;
+        // 归属月优先：归属年为y → 计入；否则看日期
         const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
-        return (belongYear === y) || r.date.startsWith(y + "-");
+        if (belongYear && belongYear !== y) return false;
+        // 无归属月时，按日期判断
+        return r.date.startsWith(y + "-");
     });
 
-    const monthSet = new Set();
-    list.forEach(r=>{
-        const mon = r.belongMonth || r.date.substring(0,7);
-        if(mon.startsWith(y)) monthSet.add(mon);
-    });
+    // 2. 统计已过月份数（用于租金计提）
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    let realMonthCount = 12;
+    if (currentYear == y) {
+        realMonthCount = today.getMonth() + 1; // 0-11 → 1-12月
+    }
 
     let yearIncome = 0, yearExpense = 0;
     const yearCat = {};
     mainCategories.forEach(c=>{yearCat[c]=0});
 
+    // 3. 按归属月统计支出，过滤跨期、租金重复
     list.forEach(r=>{
         const amt = r.amount;
         if(r.type==="收入"){
             yearIncome+=amt;
         } else {
             const [mc,sc] = (r.category||"").split("-");
-            // 核心修复：预付款排除场地租金，场地支出包含所有小类（含租金）
+            // 预付款：排除场地租金，避免重复
             if(mc==="预付款"){
                 if(sc==="场地租金") return;
                 yearExpense+=amt;
                 yearCat[mc]+=amt;
-            } else if(mc==="场地支出"){
-                yearExpense+=amt;
-                yearCat[mc]+=amt;
-            } else {
+            } 
+            // 其他大类正常统计（场地支出包含所有小类）
+            else {
                 yearExpense+=amt;
                 if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
             }
         }
     });
 
-    const realMonthCount = monthSet.size;
+    // 4. 按月计提租金
     const monthlyRent = totalYearRent / 12;
     const actualRentCost = monthlyRent * realMonthCount;
     const yearProfit = yearIncome - yearExpense - actualRentCost;
@@ -652,9 +660,9 @@ function genYearReport() {
     <div class="overview-card">
         <p>总收入：${yearIncome.toFixed(2)}</p>
         <p>总支出：${yearExpense.toFixed(2)}</p>
-        <p>全年租金：${totalYearRent.toFixed(2)}</p>
-        <p>已发生月份：${realMonthCount} 个月</p>
-        <p>应计租金：${actualRentCost.toFixed(2)}</p>
+        <p>全年总租金：${totalYearRent.toFixed(2)}</p>
+        <p>已计提月份：${realMonthCount} 个月</p>
+        <p>本期应计租金：${actualRentCost.toFixed(2)}</p>
         <p>年度净利：${yearProfit.toFixed(2)}</p>
         <p>利润率：${yearMargin}%</p>
     </div>
@@ -696,8 +704,10 @@ function genYearReport() {
 function showYearCategoryDetail(year, mainCat){
     const list = records.filter(r=>{
         if(r.type!=="支出") return false;
-        const by = r.belongMonth ? r.belongMonth.substring(0,4) : "";
-        if(by!==year && !r.date.startsWith(year+"-")) return false;
+        // 明细也按归属月过滤，和年报一致
+        const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
+        if (belongYear && belongYear !== year) return false;
+        if (!r.belongMonth && !r.date.startsWith(year + "-")) return false;
         const [mc] = (r.category||"").split("-");
         return mc === mainCat;
     });
@@ -744,6 +754,66 @@ function queryDividend(){
     document.getElementById("detailTitle").innerText="分红明细";
     document.getElementById("detailContent").innerHTML=html;
     document.getElementById("detailModal").style.display="block";
+}
+
+function showMonthProfitCheck() {
+    const m = document.getElementById("monthQuery").value;
+    if (!m) { alert("请选择月份"); return; }
+
+    const list = records.filter(x =>
+        (x.belongMonth === m) || (!x.belongMonth && x.date.startsWith(m))
+    );
+
+    let p_income = 0, p_expense = 0;
+    list.forEach(r => {
+        if (r.type === "转账" || r.remark?.includes("分红")) return;
+        if (r.type === "收入") p_income += r.amount;
+        if (r.type === "支出") p_expense += r.amount;
+    });
+    const profit = p_income - p_expense;
+
+    let flow = 0;
+    list.forEach(r => {
+        if (r.type === "收入") flow += r.amount;
+        if (r.type === "支出") flow -= r.amount;
+    });
+
+    const diff = profit - flow;
+
+    let html = `
+    <h3>${m} 月度利润对账表</h3>
+    <div class="year-overview">
+        <div class="overview-card">
+            <p>经营收入：${p_income.toFixed(2)}</p>
+            <p>经营支出：${p_expense.toFixed(2)}</p>
+            <p>经营利润：${profit.toFixed(2)}</p>
+            <p>账户实际净额：${flow.toFixed(2)}</p>
+            <p style="color:red;font-weight:bold;">差额：${diff.toFixed(2)}</p>
+        </div>
+    </div>
+    <h4>差额原因：分红/转账/未归属月份等</h4>
+    <table class="report-table">
+    <tr><th>日期</th><th>类型</th><th>金额</th><th>备注</th><th>说明</th></tr>`;
+
+    list.forEach(r=>{
+        let tip = "";
+        if (r.remark?.includes("分红")) tip = "分红(影响余额不影响利润)";
+        else if (r.type === "转账") tip = "转账(不影响利润)";
+        else if (!r.belongMonth && !r.date.startsWith(m)) tip = "月份不匹配";
+        else return;
+        html+=`<tr>
+        <td>${r.date}</td>
+        <td>${r.type}</td>
+        <td>${r.amount.toFixed(2)}</td>
+        <td>${r.remark}</td>
+        <td style="color:blue">${tip}</td>
+        </tr>`;
+    });
+
+    html+=`</table>`;
+    document.getElementById("reportTitle").innerText = m+"利润对账";
+    document.getElementById("reportContent").innerHTML = html;
+    document.getElementById("reportModal").style.display = "block";
 }
 
 function closeDetailModal(){
