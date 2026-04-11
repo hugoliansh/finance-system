@@ -26,7 +26,7 @@ th{background:#f8f9fa}
 .report-table th,.report-table td{border:1px solid #ddd;padding:6px;text-align:left;font-size:clamp(0.8rem,2.5vw,0.95rem)}
 .report-table th{background:#f0f0f0;font-weight:bold}
 .chart-box{margin:20px 0;text-align:center}
-.chart-box canvas{max-height:300px;max-width:90%;margin:0 auto}
+.chart-box canvas{max-height:400px;max-width:95%;margin:0 auto}
 .year-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:15px 0}
 .overview-card{background:#f8f9fa;padding:12px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
 .overview-card h4{margin-top:0;margin-bottom:8px;font-size:clamp(1rem,3vw,1.2rem)}
@@ -62,7 +62,6 @@ th{background:#f8f9fa}
     <button id="importBtn" style="display:none;background:#17a2b8" onclick="document.getElementById('importFile').click()">导入Excel</button>
     <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls" onchange="importExcel(event)">
     <button onclick="showCategoryGuide()" style="background:#9966ff;color:white">支出分类说明</button>
-    <button onclick="queryDividend()" style="background:#ff6384;color:white">查询分红</button>
 </div>
 
 <div class="top-report">
@@ -256,6 +255,7 @@ const expenseCategories = {
     "其他支出":["无分类"]
 };
 const mainCategories = Object.keys(expenseCategories);
+const displayCats = mainCategories.filter(c => c !== '预付款');
 
 function fixAccount(acc) {
     if (acc === "公司") return "公司账户";
@@ -597,72 +597,88 @@ function showMonthCategoryDetail(month, mainCat){
 
     document.getElementById("detailTitle").innerText = `${month} ${mainCat} 明细`;
     document.getElementById("detailContent").innerHTML = html;
-    document.getElementById("detailModal").style.display = "block";
+    document.getElementById("detailModal").style.display="block";
 }
 
-// ==============================================
-// ✅ 最终终极年报算法：把计提租金直接合并进场地支出
 // ==============================================
 function genYearReport() {
     const targetYear = document.getElementById("yearInput").value.trim();
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
-
     if (!targetYear) { alert("请输入年份"); return; }
 
-    // 1. 筛选：归属当年、非转账、非分红（不屏蔽任何支出）
+    // 1. 全年有效数据
     const validList = records.filter(r => {
         if (r.type === '转账' || r.remark?.includes('分红')) return false;
-        if (r.belongMonth) {
-            return r.belongMonth.startsWith(targetYear);
-        }
+        if (r.belongMonth) return r.belongMonth.startsWith(targetYear);
         return r.date.startsWith(targetYear + '-');
     });
 
-    // 2. 统计收入、所有支出（含预付款）
+    // 2. 年度汇总
     let yearIncome = 0;
     const categoryTotal = {};
-    mainCategories.forEach(cat => { categoryTotal[cat] = 0; });
+    mainCategories.forEach(c => { categoryTotal[c] = 0; });
 
     validList.forEach(r => {
         const amt = r.amount;
         if (r.type === '收入') {
             yearIncome += amt;
         } else {
-            const [mainCat] = (r.category || '').split('-');
-            if (mainCat && categoryTotal[mainCat] !== undefined) {
-                categoryTotal[mainCat] += amt;
-            }
+            const [mc] = (r.category || '').split('-');
+            if (mc && categoryTotal[mc] !== undefined) categoryTotal[mc] += amt;
         }
     });
 
-    // 3. 流水总支出（含预付款，保证数据完整）
-    const totalExpenseWithPrepay = mainCategories.reduce(
-        (sum, cat) => sum + categoryTotal[cat], 0
-    );
-
-    // 4. 计算已过月份、计提租金
+    // 3. 租金计提
     const today = new Date();
     const isCurrentYear = today.getFullYear() === parseInt(targetYear);
     const monthCount = isCurrentYear ? today.getMonth() + 1 : 12;
     const monthlyRent = totalYearRent / 12;
     const accruedRent = monthlyRent * monthCount;
 
-    // 5. 把计提租金直接合并进场地支出
+    // 4. 场地支出 = 流水 + 计提房租
     categoryTotal['场地支出'] += accruedRent;
 
-    // 6. 用「加多少减多少」的方式，把预付款从成本中剔除
+    // 5. 剔除预付款
     const prepayAmount = categoryTotal['预付款'] || 0;
+    const totalExpenseWithPrepay = mainCategories.reduce((s,c)=>s+categoryTotal[c],0);
     const totalCost = totalExpenseWithPrepay + accruedRent - prepayAmount;
     const yearProfit = yearIncome - totalCost;
-    const profitMargin = yearIncome > 0 ? ((yearProfit / yearIncome) * 100).toFixed(1) : '—';
+    const profitMargin = yearIncome > 0 ? ((yearProfit/yearIncome)*100).toFixed(1) : '—';
 
-    // 7. 生成展示用的分类数据（不含预付款，不影响占比）
-    const displayCategories = mainCategories.filter(cat => cat !== '预付款');
-    const displayTotal = displayCategories.reduce(
-        (sum, cat) => sum + categoryTotal[cat], 0
-    );
+    // 6. 展示分类（不含预付款）
+    const displayTotal = displayCats.reduce((s,c)=>s+categoryTotal[c],0);
 
-    // 8. 页面展示
+    const monthLabels = [];
+    const monthData = {};
+    displayCats.forEach(c => { monthData[c] = []; });
+
+    for (let m = 1; m <= monthCount; m++) {
+        const mm = String(m).padStart(2, '0');
+        const ym = `${targetYear}-${mm}`;
+        monthLabels.push(ym);
+
+        const monthList = validList.filter(r => {
+            const bm = r.belongMonth || (r.date.substring(0,7));
+            return bm === ym;
+        });
+
+        const temp = {};
+        displayCats.forEach(c => temp[c] = 0);
+        monthList.forEach(r => {
+            if (r.type !== '支出') return;
+            const [mc] = (r.category || '').split('-');
+            if (mc && temp[mc] !== undefined) temp[mc] += r.amount;
+        });
+
+        // 场地支出每月也均摊当月房租
+        temp['场地支出'] += monthlyRent;
+
+        displayCats.forEach(c => {
+            monthData[c].push(temp[c]);
+        });
+    }
+
+    // 页面输出
     let html = `
     <h3>${targetYear} 年度经营分析</h3>
     <div class="year-overview">
@@ -678,38 +694,69 @@ function genYearReport() {
         </div>
     </div>
 
-    <h4>支出分类明细（不含预付款，场地支出含计提租金）</h4>
+    <h4>支出分类明细</h4>
     <table class="report-table">
     <tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
-    displayCategories.forEach(cat => {
-        const amt = categoryTotal[cat];
-        const pct = displayTotal > 0 ? ((amt / displayTotal) * 100).toFixed(1) : '0.0';
+    displayCats.forEach(c => {
+        const amt = categoryTotal[c];
+        const pct = displayTotal > 0 ? ((amt/displayTotal)*100).toFixed(1) : '0.0';
         html += `
         <tr>
-            <td>${cat}</td>
+            <td>${c}</td>
             <td>${amt.toFixed(2)}</td>
             <td>${pct}%</td>
-            <td><button class="detail-btn" onclick="showYearCategoryDetail('${targetYear}','${cat}')">查看流水</button></td>
+            <td><button class="detail-btn" onclick="showYearCategoryDetail('${targetYear}','${c}')">查看流水</button></td>
         </tr>`;
     });
 
     html += `
     </table>
-    <div class="chart-box"><canvas id="yearPieChart"></canvas></div>`;
+
+    <h4>📈 月度支出项目幅度变化（折线图）</h4>
+    <div class="chart-box"><canvas id="lineChart"></canvas></div>
+
+    <h4>🥧 年度支出结构占比（饼图）</h4>
+    <div class="chart-box"><canvas id="pieChart"></canvas></div>`;
 
     document.getElementById('reportTitle').innerText = `${targetYear} 年度财报`;
     document.getElementById('reportContent').innerHTML = html;
     document.getElementById('reportModal').style.display = 'block';
 
+    // 折线图
     setTimeout(() => {
-        new Chart(document.getElementById('yearPieChart').getContext('2d'), {
+        const lineCtx = document.getElementById('lineChart').getContext('2d');
+        const datasets = displayCats.map((cat, idx) => {
+            const colors = ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#6cc3d5","#ff7c7c"];
+            return {
+                label: cat,
+                data: monthData[cat],
+                borderColor: colors[idx % colors.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                tension: 0.2,
+                fill: false
+            };
+        });
+
+        new Chart(lineCtx, {
+            type: 'line',
+            data: { labels: monthLabels, datasets: datasets },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'right' } },
+                scales: { y: { beginAtZero: true, title: { display:true, text:'金额' } } }
+            }
+        });
+
+        // 饼图
+        new Chart(document.getElementById('pieChart').getContext('2d'), {
             type: 'pie',
             data: {
-                labels: displayCategories,
+                labels: displayCats,
                 datasets: [{
-                    data: displayCategories.map(c => categoryTotal[c]),
-                    backgroundColor: ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#6cc3d5"]
+                    data: displayCats.map(c => categoryTotal[c]),
+                    backgroundColor: ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#6cc3d5","#ff7c7c"]
                 }]
             },
             options: { plugins: { legend: { position: 'right' } } }
@@ -833,12 +880,8 @@ function showMonthProfitCheck() {
     document.getElementById("reportModal").style.display = "block";
 }
 
-function closeDetailModal(){
-    document.getElementById("detailModal").style.display="none";
-}
-function closeReport(){
-    document.getElementById("reportModal").style.display="none";
-}
+function closeDetailModal(){ document.getElementById("detailModal").style.display="none"; }
+function closeReport(){ document.getElementById("reportModal").style.display="none"; }
 
 function showCategoryGuide(){
   document.getElementById("categoryContent").innerHTML = `
