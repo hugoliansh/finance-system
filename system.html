@@ -496,7 +496,7 @@ function queryBalance(){
     const bal = {
         支付宝: initialBalance.支付宝 || 0,
         微信: initialBalance.微信 || 0,
-        兴业银行: initialBalance.兴业银行 || 0,
+       兴业银行: initialBalance.兴业银行 || 0,
         公司账户: initialBalance.公司账户 || 0,
         刷卡: initialBalance.刷卡 || 0
     };
@@ -599,115 +599,130 @@ function showMonthCategoryDetail(month, mainCat){
     document.getElementById("detailModal").style.display = "block";
 }
 
-// ✅ 核心修复：按归属月统计年报 + 租金按月计提
+// ==============================================
+// ✅ 彻底重写年报算法：完全按你要求来
+// ==============================================
 function genYearReport() {
-    const y = document.getElementById("yearInput").value;
+    const targetYear = document.getElementById("yearInput").value.trim();
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
-    if (!y) { alert("请输入年份"); return; }
 
-    // 1. 严格按归属月筛选：仅统计归属年为y，或无归属月但日期在y年的流水
-    const list = records.filter(r => {
-        if (r.type === "转账" || r.remark?.includes("分红")) return false;
-        // 归属月优先：归属年为y → 计入；否则看日期
-        const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
-        if (belongYear && belongYear !== y) return false;
-        // 无归属月时，按日期判断
-        return r.date.startsWith(y + "-");
+    if (!targetYear) { alert("请输入年份"); return; }
+
+    // 1. 筛选规则：只看归属月
+    const validList = records.filter(r => {
+        // 转账、分红 不进利润表
+        if (r.type === '转账' || r.remark?.includes('分红')) return false;
+        // 有归属月 → 必须等于目标年份
+        if (r.belongMonth) {
+            return r.belongMonth.startsWith(targetYear);
+        }
+        // 无归属月 → 按日期
+        return r.date.startsWith(targetYear + '-');
     });
 
-    // 2. 统计已过月份数（用于租金计提）
-    const today = new Date();
-    const currentYear = today.getFullYear();
-    let realMonthCount = 12;
-    if (currentYear == y) {
-        realMonthCount = today.getMonth() + 1; // 0-11 → 1-12月
-    }
+    // 2. 统计收入 & 各类支出
+    let yearIncome = 0;
+    const categoryTotal = {};
+    mainCategories.forEach(cat => { categoryTotal[cat] = 0; });
 
-    let yearIncome = 0, yearExpense = 0;
-    const yearCat = {};
-    mainCategories.forEach(c=>{yearCat[c]=0});
-
-    // 3. 按归属月统计支出，过滤跨期、租金重复
-    list.forEach(r=>{
+    validList.forEach(r => {
         const amt = r.amount;
-        if(r.type==="收入"){
-            yearIncome+=amt;
+        if (r.type === '收入') {
+            yearIncome += amt;
         } else {
-            const [mc,sc] = (r.category||"").split("-");
-            // 预付款：排除场地租金，避免重复
-            if(mc==="预付款"){
-                if(sc==="场地租金") return;
-                yearExpense+=amt;
-                yearCat[mc]+=amt;
-            } 
-            // 其他大类正常统计（场地支出包含所有小类）
-            else {
-                yearExpense+=amt;
-                if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
+            const [mainCat] = (r.category || '').split('-');
+            if (mainCat && categoryTotal[mainCat] !== undefined) {
+                categoryTotal[mainCat] += amt;
             }
         }
     });
 
-    // 4. 按月计提租金
+    // 3. 经营支出总和（不含计提租金）
+    const totalBusinessExpense = mainCategories.reduce(
+        (sum, cat) => sum + categoryTotal[cat], 0
+    );
+
+    // 4. 计算当年已过月份
+    const today = new Date();
+    const isCurrentYear = today.getFullYear() === parseInt(targetYear);
+    const monthCount = isCurrentYear ? today.getMonth() + 1 : 12;
     const monthlyRent = totalYearRent / 12;
-    const actualRentCost = monthlyRent * realMonthCount;
-    const yearProfit = yearIncome - yearExpense - actualRentCost;
-    const yearMargin = yearIncome>0 ? (yearProfit/yearIncome*100).toFixed(1) : "—";
+    const accruedRent = monthlyRent * monthCount;
 
+    // 5. 场地成本 = 流水里的场地支出 + 计提租金
+    const totalSiteCost = categoryTotal['场地支出'] + accruedRent;
+
+    // 6. 最终总成本 & 利润
+    const totalCost = totalBusinessExpense + accruedRent;
+    const yearProfit = yearIncome - totalCost;
+    const profitMargin = yearIncome > 0 ? ((yearProfit / yearIncome) * 100).toFixed(1) : '—';
+
+    // 7. 页面展示
     let html = `
-<h3>${y} 年度经营分析</h3>
-<div class="year-overview">
-    <div class="overview-card">
-        <p>总收入：${yearIncome.toFixed(2)}</p>
-        <p>总支出：${yearExpense.toFixed(2)}</p>
-        <p>全年总租金：${totalYearRent.toFixed(2)}</p>
-        <p>已计提月份：${realMonthCount} 个月</p>
-        <p>本期应计租金：${actualRentCost.toFixed(2)}</p>
-        <p>年度净利：${yearProfit.toFixed(2)}</p>
-        <p>利润率：${yearMargin}%</p>
+    <h3>${targetYear} 年度经营分析</h3>
+    <div class="year-overview">
+        <div class="overview-card">
+            <p>总收入：${yearIncome.toFixed(2)}</p>
+            <p>经营总支出：${totalBusinessExpense.toFixed(2)}</p>
+            <p>全年租金：${totalYearRent.toFixed(2)}</p>
+            <p>已过月份：${monthCount} 个月</p>
+            <p>计提租金：${accruedRent.toFixed(2)}</p>
+            <p>总成本：${totalCost.toFixed(2)}</p>
+            <p>年度净利：${yearProfit.toFixed(2)}</p>
+            <p>利润率：${profitMargin}%</p>
+        </div>
     </div>
-</div>
-<h4>支出结构</h4>
-<table class="report-table">
-<tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
-    mainCategories.forEach(c=>{
-        const v = yearCat[c];
-        const p = yearExpense>0 ? (v/yearExpense*100).toFixed(1) : 0;
-        html+=`<tr>
-<td>${c}</td>
-<td>${v.toFixed(2)}</td>
-<td>${p}%</td>
-<td><button class="detail-btn" onclick="showYearCategoryDetail('${y}','${c}')">查看流水</button></td>
-</tr>`;
+    <h4>支出结构（含场地流水，不含计提租金）</h4>
+    <table class="report-table">
+    <tr><th>大类</th><th>流水金额</th><th>占比</th><th>明细</th></tr>`;
+
+    mainCategories.forEach(cat => {
+        const amt = categoryTotal[cat];
+        const pct = totalBusinessExpense > 0
+            ? ((amt / totalBusinessExpense) * 100).toFixed(1)
+            : '0.0';
+        html += `
+        <tr>
+            <td>${cat}</td>
+            <td>${amt.toFixed(2)}</td>
+            <td>${pct}%</td>
+            <td><button class="detail-btn" onclick="showYearCategoryDetail('${targetYear}','${cat}')">查看流水</button></td>
+        </tr>`;
     });
 
-    html+=`</table>
-<div class="chart-box"><canvas id="yearPieChart"></canvas></div>`;
+    html += `
+    </table>
+    <div class="chart-box"><canvas id="yearPieChart"></canvas></div>`;
 
-    document.getElementById("reportTitle").innerText = y+"年度财报";
-    document.getElementById("reportContent").innerHTML = html;
-    document.getElementById("reportModal").style.display = "block";
+    document.getElementById('reportTitle').innerText = `${targetYear} 年度财报`;
+    document.getElementById('reportContent').innerHTML = html;
+    document.getElementById('reportModal').style.display = 'block';
 
-    setTimeout(()=>{
-        const labels=[],values=[];
-        const colors=["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"];
-        mainCategories.forEach((c,i)=>{labels.push(c);values.push(yearCat[c])});
-        new Chart(document.getElementById("yearPieChart").getContext("2d"),{
-            type:"pie",
-            data:{labels,datasets:[{data:values,backgroundColor:colors}]},
-            options:{plugins:{legend:{position:"right"}}}
+    setTimeout(() => {
+        const ctx = document.getElementById('yearPieChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: mainCategories,
+                datasets: [{
+                    data: mainCategories.map(c => categoryTotal[c]),
+                    backgroundColor: ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"]
+                }]
+            },
+            options: { plugins: { legend: { position: 'right' } } }
         });
-    },100);
+    }, 100);
 }
 
 function showYearCategoryDetail(year, mainCat){
     const list = records.filter(r=>{
         if(r.type!=="支出") return false;
-        // 明细也按归属月过滤，和年报一致
-        const belongYear = r.belongMonth ? r.belongMonth.substring(0,4) : "";
-        if (belongYear && belongYear !== year) return false;
-        if (!r.belongMonth && !r.date.startsWith(year + "-")) return false;
+        if(r.belongMonth){
+            if(!r.belongMonth.startsWith(year)) return false;
+        }else{
+            if(!r.date.startsWith(year+'-')) return false;
+        }
         const [mc] = (r.category||"").split("-");
         return mc === mainCat;
     });
@@ -738,7 +753,7 @@ function showYearCategoryDetail(year, mainCat){
 
     document.getElementById("detailTitle").innerText = `${year} ${mainCat} 明细`;
     document.getElementById("detailContent").innerHTML = html;
-    document.getElementById("detailModal").style.display = "block";
+    document.getElementById("detailModal").style.display="block";
 }
 
 function queryDividend(){
