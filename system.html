@@ -599,28 +599,22 @@ function showMonthCategoryDetail(month, mainCat){
     document.getElementById("detailModal").style.display = "block";
 }
 
-// ==============================================
-// ✅ 彻底重写年报算法：完全按你要求来
-// ==============================================
 function genYearReport() {
     const targetYear = document.getElementById("yearInput").value.trim();
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
 
     if (!targetYear) { alert("请输入年份"); return; }
 
-    // 1. 筛选规则：只看归属月
+    // 1. 先筛选：归属当年、非转账、非分红
     const validList = records.filter(r => {
-        // 转账、分红 不进利润表
         if (r.type === '转账' || r.remark?.includes('分红')) return false;
-        // 有归属月 → 必须等于目标年份
         if (r.belongMonth) {
             return r.belongMonth.startsWith(targetYear);
         }
-        // 无归属月 → 按日期
         return r.date.startsWith(targetYear + '-');
     });
 
-    // 2. 统计收入 & 各类支出
+    // 2. 统计收入 & 支出
     let yearIncome = 0;
     const categoryTotal = {};
     mainCategories.forEach(cat => { categoryTotal[cat] = 0; });
@@ -629,59 +623,61 @@ function genYearReport() {
         const amt = r.amount;
         if (r.type === '收入') {
             yearIncome += amt;
-        } else {
-            const [mainCat] = (r.category || '').split('-');
-            if (mainCat && categoryTotal[mainCat] !== undefined) {
-                categoryTotal[mainCat] += amt;
-            }
+            return;
+        }
+
+        // ==============================================
+        // ✅ 关键：只有【预付款-场地租金】不计入成本
+        // ==============================================
+        const [mainCat, subCat] = (r.category || '').split('-');
+        if (mainCat === '预付款' && subCat === '场地租金') {
+            return; // 不计入
+        }
+
+        // 其他所有支出正常计入
+        if (mainCat && categoryTotal[mainCat] !== undefined) {
+            categoryTotal[mainCat] += amt;
         }
     });
 
-    // 3. 经营支出总和（不含计提租金）
-    const totalBusinessExpense = mainCategories.reduce(
-        (sum, cat) => sum + categoryTotal[cat], 0
-    );
+    // 流水总支出（已剔除预付款里的场地租金）
+    const totalExpense = mainCategories.reduce((sum, cat) => sum + categoryTotal[cat], 0);
 
-    // 4. 计算当年已过月份
+    // 计提租金：按月数计算
     const today = new Date();
     const isCurrentYear = today.getFullYear() === parseInt(targetYear);
     const monthCount = isCurrentYear ? today.getMonth() + 1 : 12;
-    const monthlyRent = totalYearRent / 12;
+   const monthlyRent = totalYearRent / 12;
     const accruedRent = monthlyRent * monthCount;
 
-    // 5. 场地成本 = 流水里的场地支出 + 计提租金
-    const totalSiteCost = categoryTotal['场地支出'] + accruedRent;
-
-    // 6. 最终总成本 & 利润
-    const totalCost = totalBusinessExpense + accruedRent;
+    // 最终成本 & 利润
+    const totalCost = totalExpense + accruedRent;
     const yearProfit = yearIncome - totalCost;
     const profitMargin = yearIncome > 0 ? ((yearProfit / yearIncome) * 100).toFixed(1) : '—';
 
-    // 7. 页面展示
+    // 页面展示
     let html = `
     <h3>${targetYear} 年度经营分析</h3>
     <div class="year-overview">
         <div class="overview-card">
             <p>总收入：${yearIncome.toFixed(2)}</p>
-            <p>经营总支出：${totalBusinessExpense.toFixed(2)}</p>
-            <p>全年租金：${totalYearRent.toFixed(2)}</p>
+            <p>流水总支出（已剔除预付租金）：${totalExpense.toFixed(2)}</p>
+            <p>全年合同租金：${totalYearRent.toFixed(2)}</p>
             <p>已过月份：${monthCount} 个月</p>
-            <p>计提租金：${accruedRent.toFixed(2)}</p>
-            <p>总成本：${totalCost.toFixed(2)}</p>
+            <p>本期计提租金成本：${accruedRent.toFixed(2)}</p>
+            <p>年度总成本：${totalCost.toFixed(2)}</p>
             <p>年度净利：${yearProfit.toFixed(2)}</p>
             <p>利润率：${profitMargin}%</p>
         </div>
     </div>
 
-    <h4>支出结构（含场地流水，不含计提租金）</h4>
+    <h4>支出分类明细</h4>
     <table class="report-table">
-    <tr><th>大类</th><th>流水金额</th><th>占比</th><th>明细</th></tr>`;
+    <tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
     mainCategories.forEach(cat => {
         const amt = categoryTotal[cat];
-        const pct = totalBusinessExpense > 0
-            ? ((amt / totalBusinessExpense) * 100).toFixed(1)
-            : '0.0';
+        const pct = totalExpense > 0 ? ((amt / totalExpense) * 100).toFixed(1) : '0.0';
         html += `
         <tr>
             <td>${cat}</td>
@@ -700,8 +696,7 @@ function genYearReport() {
     document.getElementById('reportModal').style.display = 'block';
 
     setTimeout(() => {
-        const ctx = document.getElementById('yearPieChart').getContext('2d');
-        new Chart(ctx, {
+        new Chart(document.getElementById('yearPieChart').getContext('2d'), {
             type: 'pie',
             data: {
                 labels: mainCategories,
@@ -714,7 +709,7 @@ function genYearReport() {
         });
     }, 100);
 }
-
+  
 function showYearCategoryDetail(year, mainCat){
     const list = records.filter(r=>{
         if(r.type!=="支出") return false;
