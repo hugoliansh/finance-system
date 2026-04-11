@@ -382,7 +382,13 @@ function queryBalance(){
     // 只计算 2026-01-01 以后，且 <= 查询日期的流水
     const list = records.filter(x => x.date >= "2026-01-01" && x.date <= d);
 
-    const bal = {支付宝:0, 微信:0, 兴业银行:0, 公司账户:0, 刷卡:0};
+    const bal = {
+  支付宝: initialBalance.支付宝 || 0,
+  微信: initialBalance.微信 || 0,
+  兴业银行: initialBalance.兴业银行 || 0,
+  公司账户: initialBalance.公司账户 || 0,
+  刷卡: initialBalance.刷卡 || 0
+};
     
     list.forEach(r => {
         if (r.type === "收入") {
