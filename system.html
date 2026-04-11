@@ -38,6 +38,9 @@ th{background:#f8f9fa}
 .progress-bar{height:100%;background:#4bc0c0;text-align:center;color:white;font-weight:bold;font-size:clamp(0.9rem,3vw,1rem)}
 .progress-text{font-size:clamp(0.9rem,3vw,1rem);margin-bottom:6px}
 
+.detail-btn{background:#28a745;color:white;border:none;padding:2px 6px;border-radius:3px;font-size:0.8rem;cursor:pointer;margin-left:8px}
+.detail-btn:hover{background:#218838}
+
 @media (max-width: 768px) {
     .form-group{flex-direction:column;align-items:flex-start}
     label{width:100%}
@@ -80,6 +83,17 @@ th{background:#f8f9fa}
             <button onclick="closeReport()">关闭</button>
         </div>
         <div id="reportContent"></div>
+    </div>
+</div>
+
+<!-- 支出明细弹窗 -->
+<div id="detailModal" class="modal">
+    <div class="modal-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h2 id="detailTitle"></h2>
+            <button onclick="closeDetailModal()">关闭</button>
+        </div>
+        <div id="detailContent"></div>
     </div>
 </div>
 
@@ -493,6 +507,7 @@ function showMonthDetail() {
     document.getElementById("reportModal").style.display = "block";
 }
 
+// ✅ 修复年报租金显示 + 新增明细按钮
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const rentInput = Number(document.getElementById("yearRent").value) || 0;
@@ -514,7 +529,11 @@ function genYearReport() {
 
     let yearIncome = 0, yearExpense = 0;
     const yearCat = {};
-    mainCategories.forEach(c => yearCat[c] = 0);
+    const yearSubCat = {}; // 存储小类明细
+    mainCategories.forEach(c => {
+        yearCat[c] = 0;
+        yearSubCat[c] = {};
+    });
 
     list.forEach(r => {
         const mon = r.belongMonth || r.date.substring(0,7);
@@ -526,10 +545,13 @@ function genYearReport() {
         } else {
             monthMap[mon].expense += amt;
             yearExpense += amt;
-            const c = r.category?.split("-")[0];
-            if (yearCat[c] !== undefined) {
-                monthMap[mon][c] += amt;
-                yearCat[c] += amt;
+            const full = r.category || "";
+            const [mc, sc] = full.split("-", 2);
+            if (yearCat[mc] !== undefined) {
+                monthMap[mon][mc] += amt;
+                yearCat[mc] += amt;
+                // 统计小类明细
+                yearSubCat[mc][sc || "无小类"] = (yearSubCat[mc][sc || "无小类"] || 0) + amt;
             }
         }
     });
@@ -578,7 +600,12 @@ function genYearReport() {
     mainCategories.forEach(c => {
         const v = yearCat[c];
         const p = yearExpense>0 ? (v/yearExpense*100).toFixed(1) : 0;
-        html += `<tr><td>${c}</td><td>${v.toFixed(2)}</td><td>${p}%</td></tr>`;
+        // 新增明细按钮，点击弹窗显示小类
+        html += `<tr>
+<td>${c}<button class="detail-btn" onclick="showDetailModal('${c}', ${JSON.stringify(yearSubCat[c]).replace(/"/g, '&quot;')})">明细</button></td>
+<td>${v.toFixed(2)}</td>
+<td>${p}%</td>
+</tr>`;
     });
 
     html += `</div>
@@ -599,7 +626,36 @@ function genYearReport() {
         });
     },100);
 }
+
+// ✅ 明细弹窗函数
+function showDetailModal(category, subCatData) {
+    // 解析小类数据
+    const subCat = JSON.parse(subCatData.replace(/&quot;/g, '"'));
+    const sortedSub = Object.entries(subCat).sort((a,b)=>b[1]-a[1]);
+    
+    let html = `<h4>${category} 小类明细</h4>
+<table class="report-table">
+<tr><th>小类</th><th>金额</th><th>占大类比</th></tr>`;
+    
+    const total = Object.values(subCat).reduce((a,b)=>a+b,0);
+    sortedSub.forEach(([k,v])=>{
+        const p = total>0 ? (v/total*100).toFixed(1) : 0;
+        html += `<tr><td>${k}</td><td>${v.toFixed(2)}</td><td>${p}%</td></tr>`;
+    });
+    
+    html += `</table>`;
+    document.getElementById("detailTitle").innerText = `${category} 支出明细`;
+    document.getElementById("detailContent").innerHTML = html;
+    document.getElementById("detailModal").style.display = "block";
+}
+
+function closeDetailModal(){
+    document.getElementById("detailModal").style.display = "none";
+}
+
 function closeReport(){document.getElementById("reportModal").style.display="none";}
+
+// ✅ 补全支出分类说明
 function showCategoryGuide(){
   document.getElementById("categoryContent").innerHTML = `
 <strong>一、人事支出</strong><br>
@@ -651,6 +707,7 @@ function showCategoryGuide(){
   `;
   document.getElementById("categoryModal").style.display="block";
 }
+
 function closeCategoryGuide(){document.getElementById("categoryModal").style.display="none";}
 function showAddUser(){document.getElementById("addUserModal").style.display="block";}
 function hideAddUser(){document.getElementById("addUserModal").style.display="none";}
