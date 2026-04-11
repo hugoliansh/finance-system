@@ -62,6 +62,7 @@ th{background:#f8f9fa}
     <button id="importBtn" style="display:none;background:#17a2b8" onclick="document.getElementById('importFile').click()">导入Excel</button>
     <input type="file" id="importFile" style="display:none" accept=".xlsx,.xls" onchange="importExcel(event)">
     <button onclick="showCategoryGuide()" style="background:#9966ff;color:white">支出分类说明</button>
+    <button onclick="queryDividend()" style="background:#ff6384;color:white">查询分红</button>
 </div>
 
 <div class="top-report">
@@ -151,7 +152,7 @@ th{background:#f8f9fa}
         </select>
     </div>
     <div class="form-group"><label>金额：</label><input type="number" id="amount" step="0.01" required></div>
-    <div class="form-group"><label>备注：</label><input type="text" id="remark"></div>
+    <div class="form-group"><label>备注：</label><input type="text" id="remark" placeholder="分红请填写：分红"></div>
     <button onclick="addRecord()">保存</button>
 
     <h2>查询对账</h2>
@@ -162,7 +163,6 @@ th{background:#f8f9fa}
     </div>
     <div class="summary" id="summaryResult"></div>
 
-    <!-- 高级筛选条 -->
     <h2>流水筛选</h2>
     <div class="filter-bar">
         <div><label>起始日期</label><input type="date" id="fDateStart"></div>
@@ -588,8 +588,9 @@ function genYearReport() {
         const amt = r.amount;
         if(r.type==="收入"){yearIncome+=amt;}
         else{
+            const [mc,sc] = (r.category||"").split("-");
+            if(mc==="预付款" && sc==="场地租金") return;
             yearExpense+=amt;
-            const [mc]= (r.category||"").split("-");
             if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
         }
     });
@@ -647,7 +648,6 @@ function genYearReport() {
     },100);
 }
 
-// 年报大类 → 打开真实流水明细
 function showYearCategoryDetail(year, mainCat){
     const list = records.filter(r=>{
         if(r.type!=="支出") return false;
@@ -684,6 +684,21 @@ function showYearCategoryDetail(year, mainCat){
     document.getElementById("detailTitle").innerText = `${year} ${mainCat} 明细`;
     document.getElementById("detailContent").innerHTML = html;
     document.getElementById("detailModal").style.display = "block";
+}
+
+function queryDividend(){
+    const list = records.filter(r=>r.remark?.includes("分红"));
+    let total =0;
+    let html=`<h3>分红记录</h3><table class="report-table">
+<tr><th>日期</th><th>金额</th><th>备注</th><th>账户</th></tr>`;
+    list.forEach(r=>{
+        total+=r.amount;
+        html+=`<tr><td>${r.date}</td><td>${r.amount.toFixed(2)}</td><td>${r.remark}</td><td>${r.channel}</td></tr>`;
+    });
+    html+=`<tr style="font-weight:bold"><td>合计</td><td>${total.toFixed(2)}</td><td></td><td></td></tr></table>`;
+    document.getElementById("detailTitle").innerText="分红明细";
+    document.getElementById("detailContent").innerHTML=html;
+    document.getElementById("detailModal").style.display="block";
 }
 
 function closeDetailModal(){
