@@ -213,7 +213,8 @@ th{background:#f8f9fa}
         <thead>
             <tr>
                 <th>日期</th><th>类型</th><th>分类</th><th>账户</th><th>转入</th><th>金额</th><th>操作人</th>
-                <th id="opTimeHeader" style="display:none;">操作时间</th><th>备注</th>
+                <th id="opTimeHeader" style="display:none;">操作时间</th>
+                <th>备注</th>
             </tr>
         </thead>
         <tbody id="recordBody"></tbody>
@@ -600,7 +601,7 @@ function showMonthCategoryDetail(month, mainCat){
 }
 
 // ==============================================
-// ✅ 终极极简年报算法：彻底绕开所有复杂逻辑
+// ✅ 最终终极年报算法：把计提租金直接合并进场地支出
 // ==============================================
 function genYearReport() {
     const targetYear = document.getElementById("yearInput").value.trim();
@@ -608,7 +609,7 @@ function genYearReport() {
 
     if (!targetYear) { alert("请输入年份"); return; }
 
-    // 1. 第一步筛选：只留归属当年、非转账、非分红
+    // 1. 筛选：归属当年、非转账、非分红（不屏蔽任何支出）
     const validList = records.filter(r => {
         if (r.type === '转账' || r.remark?.includes('分红')) return false;
         if (r.belongMonth) {
@@ -617,7 +618,7 @@ function genYearReport() {
         return r.date.startsWith(targetYear + '-');
     });
 
-    // 2. 统计收入 & 支出（核心：预付款大类100%不计入成本）
+    // 2. 统计收入、所有支出（含预付款）
     let yearIncome = 0;
     const categoryTotal = {};
     mainCategories.forEach(cat => { categoryTotal[cat] = 0; });
@@ -626,61 +627,64 @@ function genYearReport() {
         const amt = r.amount;
         if (r.type === '收入') {
             yearIncome += amt;
-            return;
-        }
-
-        // ✅ 关键：预付款大类，完全不计入年度成本
-        const [mainCat] = (r.category || '').split('-');
-        if (mainCat === '预付款') {
-            return; // 直接跳过，不统计
-        }
-
-        // 其他所有支出正常计入
-        if (mainCat && categoryTotal[mainCat] !== undefined) {
-            categoryTotal[mainCat] += amt;
+        } else {
+            const [mainCat] = (r.category || '').split('-');
+            if (mainCat && categoryTotal[mainCat] !== undefined) {
+                categoryTotal[mainCat] += amt;
+            }
         }
     });
 
-    // 3. 流水总支出（已完全剔除预付款）
-    const totalExpense = mainCategories.reduce(
+    // 3. 流水总支出（含预付款，保证数据完整）
+    const totalExpenseWithPrepay = mainCategories.reduce(
         (sum, cat) => sum + categoryTotal[cat], 0
     );
 
-    // 4. 计提租金：按当年已过月份 × 月均租金
+    // 4. 计算已过月份、计提租金
     const today = new Date();
     const isCurrentYear = today.getFullYear() === parseInt(targetYear);
     const monthCount = isCurrentYear ? today.getMonth() + 1 : 12;
     const monthlyRent = totalYearRent / 12;
     const accruedRent = monthlyRent * monthCount;
 
-    // 5. 最终成本 & 利润
-    const totalCost = totalExpense + accruedRent;
+    // 5. 把计提租金直接合并进场地支出
+    categoryTotal['场地支出'] += accruedRent;
+
+    // 6. 用「加多少减多少」的方式，把预付款从成本中剔除
+    const prepayAmount = categoryTotal['预付款'] || 0;
+    const totalCost = totalExpenseWithPrepay + accruedRent - prepayAmount;
     const yearProfit = yearIncome - totalCost;
     const profitMargin = yearIncome > 0 ? ((yearProfit / yearIncome) * 100).toFixed(1) : '—';
 
-    // 6. 页面展示
+    // 7. 生成展示用的分类数据（不含预付款，不影响占比）
+    const displayCategories = mainCategories.filter(cat => cat !== '预付款');
+    const displayTotal = displayCategories.reduce(
+        (sum, cat) => sum + categoryTotal[cat], 0
+    );
+
+    // 8. 页面展示
     let html = `
     <h3>${targetYear} 年度经营分析</h3>
     <div class="year-overview">
         <div class="overview-card">
             <p>总收入：${yearIncome.toFixed(2)}</p>
-            <p>流水总支出（已剔除预付款）：${totalExpense.toFixed(2)}</p>
+            <p>流水总支出（含预付款）：${totalExpenseWithPrepay.toFixed(2)}</p>
             <p>全年合同租金：${totalYearRent.toFixed(2)}</p>
             <p>已过月份：${monthCount} 个月</p>
             <p>本期计提租金成本：${accruedRent.toFixed(2)}</p>
-            <p>年度总成本：${totalCost.toFixed(2)}</p>
+            <p>年度总成本（含计提、剔除预付款）：${totalCost.toFixed(2)}</p>
             <p>年度净利：${yearProfit.toFixed(2)}</p>
             <p>利润率：${profitMargin}%</p>
         </div>
     </div>
 
-    <h4>支出分类明细（不含预付款）</h4>
+    <h4>支出分类明细（不含预付款，场地支出含计提租金）</h4>
     <table class="report-table">
     <tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
-    mainCategories.forEach(cat => {
+    displayCategories.forEach(cat => {
         const amt = categoryTotal[cat];
-        const pct = totalExpense > 0 ? ((amt / totalExpense) * 100).toFixed(1) : '0.0';
+        const pct = displayTotal > 0 ? ((amt / displayTotal) * 100).toFixed(1) : '0.0';
         html += `
         <tr>
             <td>${cat}</td>
@@ -702,10 +706,10 @@ function genYearReport() {
         new Chart(document.getElementById('yearPieChart').getContext('2d'), {
             type: 'pie',
             data: {
-                labels: mainCategories,
+                labels: displayCategories,
                 datasets: [{
-                    data: mainCategories.map(c => categoryTotal[c]),
-                    backgroundColor: ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"]
+                    data: displayCategories.map(c => categoryTotal[c]),
+                    backgroundColor: ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#6cc3d5"]
                 }]
             },
             options: { plugins: { legend: { position: 'right' } } }
