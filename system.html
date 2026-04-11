@@ -41,14 +41,15 @@ th{background:#f8f9fa}
 .detail-btn{background:#28a745;color:white;border:none;padding:2px 6px;border-radius:3px;font-size:0.8rem;cursor:pointer;margin-left:8px}
 .detail-btn:hover{background:#218838}
 
-@media (max-width: 768px) {
-    .form-group{flex-direction:column;align-items:flex-start}
-    label{width:100%}
-    input,select{width:100%}
-    .top-report{position:static;margin:10px 0}
-    table{min-width:unset}
-    th,td{padding:6px;font-size:0.8rem}
-    .year-overview{grid-template-columns:1fr 1fr}
+.filter-bar {
+  background:#f8f9fa; padding:10px; border-radius:8px; margin:10px 0;
+  display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+.filter-bar label {
+  width:auto; font-weight:normal; margin-right:4px;
+}
+.filter-bar input, .filter-bar select {
+  width:auto; min-width:100px;
 }
 </style>
 </head>
@@ -92,7 +93,7 @@ th{background:#f8f9fa}
             <h2 id="detailTitle"></h2>
             <button onclick="closeDetailModal()">关闭</button>
         </div>
-        <div id="detailContent"></div>
+        <div id="detailContent" style="overflow-x:auto;"></div>
     </div>
 </div>
 
@@ -161,6 +162,44 @@ th{background:#f8f9fa}
     </div>
     <div class="summary" id="summaryResult"></div>
 
+    <!-- 高级筛选条 -->
+    <h2>流水筛选</h2>
+    <div class="filter-bar">
+        <div><label>起始日期</label><input type="date" id="fDateStart"></div>
+        <div><label>结束日期</label><input type="date" id="fDateEnd"></div>
+        <div><label>类型</label>
+            <select id="fType">
+                <option value="">全部</option>
+                <option value="收入">收入</option>
+                <option value="支出">支出</option>
+                <option value="转账">转账</option>
+            </select>
+        </div>
+        <div><label>分类</label>
+            <select id="fCategory">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div><label>账户</label>
+            <select id="fChannel">
+                <option value="">全部</option>
+                <option value="支付宝">支付宝</option><option value="微信">微信</option>
+                <option value="兴业银行">兴业银行</option><option value="公司账户">公司账户</option>
+                <option value="刷卡">刷卡</option>
+            </select>
+        </div>
+        <div><label>转入</label>
+            <select id="fToChannel">
+                <option value="">全部</option>
+                <option value="支付宝">支付宝</option><option value="微信">微信</option>
+                <option value="兴业银行">兴业银行</option><option value="公司账户">公司账户</option>
+                <option value="刷卡">刷卡</option>
+            </select>
+        </div>
+        <button onclick="applyFilter()">筛选</button>
+        <button onclick="resetFilter()">重置</button>
+    </div>
+
     <h2>流水记录</h2>
     <div class="pagination">
         <button onclick="prevPage()">上一页</button>
@@ -201,6 +240,7 @@ let residualValue = 0;
 let initialBalance = { 支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0 };
 let page = 1;
 const pageSize = 50;
+let filteredRecords = [];
 
 const expenseCategories = {
     "人事支出":["薪资-基本薪酬","团建-日常活动","培训","招聘","其他-福利/补贴"],
@@ -253,10 +293,8 @@ function getCurrentProfit(){
     records.forEach(r => {
         if (r.type === "转账") return;
         if (r.remark?.includes("分红")) return;
-        
         const year = r.belongMonth ? r.belongMonth.substring(0,4) : r.date.substring(0,4);
         if(year !== "2026") return;
-        
         if (r.type === "收入") profit += r.amount;
         if (r.type === "支出") profit -= r.amount;
     });
@@ -267,13 +305,10 @@ function updateProgressBar(){
     const init2025 = getInitialInvestment();
     const target = residualValue + init2025;
     const profit = getCurrentProfit();
-    
     let pct = 0;
     if(target > 0) pct = Math.min(100, Math.max(0, (profit / target) * 100));
-    
     document.getElementById("progressText").innerText =
         `公司残值：${residualValue.toFixed(2)} | 2025年底总投入：${init2025.toFixed(2)} | 回本目标：${target.toFixed(2)} | 当前利润：${profit.toFixed(2)}`;
-    
     document.getElementById("progressBar").style.width = pct + "%";
     document.getElementById("progressBar").innerText = pct.toFixed(1) + "%";
 }
@@ -299,11 +334,7 @@ async function loadData(){
             initialBalance:data.record?.initialBalance || {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}
         };
     }catch(e){
-        return {
-            records:[],
-            residualValue:0,
-            initialBalance:{支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}
-        };
+        return {records:[],residualValue:0,initialBalance:{支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0}};
     }
 }
 
@@ -337,11 +368,18 @@ window.onload=async()=>{
         opt.value=c; opt.innerText=c;
         mainSel.appendChild(opt);
     });
+    const fcat = document.getElementById("fCategory");
+    mainCategories.forEach(c=>{
+        const opt = document.createElement("option");
+        opt.value = c; opt.innerText = c;
+        fcat.appendChild(opt);
+    });
     refreshForm();
     const cloud=await loadData();
     records=cloud.records||[];
     residualValue=cloud.residualValue||0;
     initialBalance=cloud.initialBalance || {支付宝:0,微信:0,兴业银行:0,公司账户:0,刷卡:0};
+    filteredRecords = [...records];
     refreshAll();
 };
 
@@ -371,16 +409,17 @@ async function addRecord(){
         operator:currentUser,operateTime:new Date().toLocaleString()
     };
     records.unshift(r);
+    filteredRecords = [...records];
     await saveData({records,residualValue,initialBalance});
     refreshAll();
     alert("保存成功");
 }
 
 function renderPage(){
-    const total=records.length;
+    const total=filteredRecords.length;
     const totalPage=Math.ceil(total/pageSize);
     if(page<1)page=1;if(page>totalPage)page=totalPage;
-    const list=records.slice((page-1)*pageSize,page*pageSize);
+    const list=filteredRecords.slice((page-1)*pageSize,page*pageSize);
     const b=document.getElementById("recordBody");b.innerHTML="";
     list.forEach(r=>{
         let acc="-",to="-";
@@ -396,9 +435,46 @@ function renderPage(){
     document.getElementById("pageInfo").innerText=`第 ${page}/${totalPage} 页 共 ${total} 条`;
     document.getElementById("pageInput").value=page;
 }
+
 function prevPage(){page--;renderPage();}
 function nextPage(){page++;renderPage();}
 function goToPage(){page=parseInt(document.getElementById("pageInput").value)||1;renderPage();}
+
+function applyFilter(){
+    const ds = document.getElementById("fDateStart").value;
+    const de = document.getElementById("fDateEnd").value;
+    const ty = document.getElementById("fType").value;
+    const cat = document.getElementById("fCategory").value;
+    const ch = document.getElementById("fChannel").value;
+    const to = document.getElementById("fToChannel").value;
+
+    filteredRecords = records.filter(r=>{
+        if(ds && r.date < ds) return false;
+        if(de && r.date > de) return false;
+        if(ty && r.type !== ty) return false;
+        if(cat){
+            const mc = r.category?.split("-")[0] || "";
+            if(mc !== cat) return false;
+        }
+        if(ch && r.channel !== ch) return false;
+        if(to && r.toChannel !== to) return false;
+        return true;
+    });
+    page = 1;
+    renderPage();
+}
+
+function resetFilter(){
+    document.getElementById("fDateStart").value = "";
+    document.getElementById("fDateEnd").value = "";
+    document.getElementById("fType").value = "";
+    document.getElementById("fCategory").value = "";
+    document.getElementById("fChannel").value = "";
+    document.getElementById("fToChannel").value = "";
+    filteredRecords = [...records];
+    page = 1;
+    renderPage();
+}
 
 function queryDaily(){
     const d=document.getElementById("queryDate").value;
@@ -416,15 +492,13 @@ function queryBalance(){
     const d = document.getElementById("queryDate").value;
     if(!d){alert("请选择查询日期");return;}
     const list = records.filter(x => x.date >= "2026-01-01" && x.date <= d);
-
     const bal = {
         支付宝: initialBalance.支付宝 || 0,
         微信: initialBalance.微信 || 0,
-       兴业银行: initialBalance.兴业银行 || 0,
+        兴业银行: initialBalance.兴业银行 || 0,
         公司账户: initialBalance.公司账户 || 0,
         刷卡: initialBalance.刷卡 || 0
     };
-    
     list.forEach(r => {
         let to = fixAccount(r.toChannel || r.channel);
         let fr = fixAccount(r.channel);
@@ -432,7 +506,6 @@ function queryBalance(){
         if (r.type === "支出") { bal[fr] -= r.amount; }
         if (r.type === "转账") { bal[fr] -= r.amount; bal[to] += r.amount; }
     });
-
     const total = Object.values(bal).reduce((a,b)=>a+(Number(b)||0),0);
     document.getElementById("summaryResult").innerText =
 `截至${d}
@@ -450,12 +523,10 @@ function showMonthDetail() {
     const list = records.filter(x =>
         (x.belongMonth === m) || (!x.belongMonth && x.date.startsWith(m))
     );
-
     let income = 0, expense = 0;
     let mainSum = {};
     let subSum = {};
     mainCategories.forEach(c => { mainSum[c] = 0; });
-
     list.forEach(r => {
         if (r.type === "转账" || r.remark?.includes("分红")) return;
         const amt = r.amount;
@@ -469,8 +540,7 @@ function showMonthDetail() {
             subSum[full] = (subSum[full] || 0) + amt;
         }
     });
-
-    let html = `<h3>${m} 月度经营分析（大类+小类，按归属月份统计）</h3>
+    let html = `<h3>${m} 月度经营分析</h3>
 <div class="year-overview">
     <div class="overview-card">
         <p>收入：${income.toFixed(2)}</p>
@@ -479,32 +549,20 @@ function showMonthDetail() {
         <p>利润率：${income>0 ? ((income-expense)/income*100).toFixed(1)+'%' : '—'}</p>
     </div>
 </div>
-
-<h4>支出大类占比</h4>
+<h4>支出大类</h4>
 <table class="report-table">
-<tr><th>大类</th><th>金额</th><th>占当月支出比</th></tr>`;
-
+<tr><th>大类</th><th>金额</th><th>占比</th></tr>`;
     mainCategories.forEach(c => {
         const val = mainSum[c];
-        const p = expense > 0 ? (val / expense * 100).toFixed(1) : 0;
+        const p = expense > 0 ? (val/expense*100).toFixed(1) : 0;
         html += `<tr><td>${c}</td><td>${val.toFixed(2)}</td><td>${p}%</td></tr>`;
     });
-
-    html += `</table><h4>支出小类占比</h4><table class="report-table">
-<tr><th>小类</th><th>金额</th><th>占比</th></tr>`;
-
-    Object.entries(subSum).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
-        const pct = expense>0 ? (v/expense*100).toFixed(1) : 0;
-        html += `<tr><td>${k}</td><td>${v.toFixed(2)}</td><td>${pct}%</td></tr>`;
-    });
-
-    html += `</table>`;
-    document.getElementById("reportTitle").innerText = m + "月度分析";
+    html += "</table>";
+    document.getElementById("reportTitle").innerText = m+"月度";
     document.getElementById("reportContent").innerHTML = html;
     document.getElementById("reportModal").style.display = "block";
 }
 
-// 年度财报：租金只摊到实际有数据的月份
 function genYearReport() {
     const y = document.getElementById("yearInput").value;
     const totalYearRent = Number(document.getElementById("yearRent").value) || 0;
@@ -517,149 +575,124 @@ function genYearReport() {
     });
 
     const monthSet = new Set();
-    const monthMap = {};
-    for (let i=1; i<=12; i++) {
-        const m = String(i).padStart(2, '0');
-        const key = `${y}-${m}`;
-        monthMap[key] = { income:0, expense:0, profit:0, margin:0 };
-        mainCategories.forEach(c => monthMap[key][c] = 0);
-    }
+    list.forEach(r=>{
+        const mon = r.belongMonth || r.date.substring(0,7);
+        if(mon.startsWith(y)) monthSet.add(mon);
+    });
 
     let yearIncome = 0, yearExpense = 0;
     const yearCat = {};
-    const yearSubCat = {};
-    mainCategories.forEach(c => {
-        yearCat[c] = 0;
-        yearSubCat[c] = {};
-    });
+    mainCategories.forEach(c=>{yearCat[c]=0});
 
-    list.forEach(r => {
-        const mon = r.belongMonth || r.date.substring(0,7);
-        if (!monthMap[mon]) return;
-        monthSet.add(mon);
+    list.forEach(r=>{
         const amt = r.amount;
-        if (r.type === "收入") {
-            monthMap[mon].income += amt;
-            yearIncome += amt;
-        } else {
-            monthMap[mon].expense += amt;
-            yearExpense += amt;
-            const full = r.category || "";
-            const [mc, sc] = full.split("-", 2);
-            if (yearCat[mc] !== undefined) {
-                monthMap[mon][mc] += amt;
-                yearCat[mc] += amt;
-                yearSubCat[mc][sc || "无小类"] = (yearSubCat[mc][sc || "无小类"] || 0) + amt;
-            }
+        if(r.type==="收入"){yearIncome+=amt;}
+        else{
+            yearExpense+=amt;
+            const [mc]= (r.category||"").split("-");
+            if(mc && yearCat[mc]!==undefined) yearCat[mc]+=amt;
         }
     });
 
-    // 实际有流水的月份数量
     const realMonthCount = monthSet.size;
     const monthlyRent = totalYearRent / 12;
     const actualRentCost = monthlyRent * realMonthCount;
-
-    const months = Object.keys(monthMap).sort();
-    months.forEach(m => {
-        const d = monthMap[m];
-        d.profit = d.income - d.expense;
-        d.margin = d.income > 0 ? (d.profit / d.income * 100) : 0;
-    });
-
     const yearProfit = yearIncome - yearExpense - actualRentCost;
-    const yearMargin = yearIncome > 0 ? (yearProfit / yearIncome * 100).toFixed(1) : "—";
+    const yearMargin = yearIncome>0 ? (yearProfit/yearIncome*100).toFixed(1) : "—";
 
     let html = `
-<h3>${y} 年度经营分析报告</h3>
+<h3>${y} 年度经营分析</h3>
 <div class="year-overview">
     <div class="overview-card">
-        <p>年度总收入：${yearIncome.toFixed(2)}</p>
-        <p>年度总支出：${yearExpense.toFixed(2)}</p>
-        <p>全年总租金：${totalYearRent.toFixed(2)}</p>
-        <p>已发生月份数：${realMonthCount} 个月</p>
+        <p>总收入：${yearIncome.toFixed(2)}</p>
+        <p>总支出：${yearExpense.toFixed(2)}</p>
+        <p>全年租金：${totalYearRent.toFixed(2)}</p>
+        <p>已发生月份：${realMonthCount} 个月</p>
         <p>应计租金：${actualRentCost.toFixed(2)}</p>
-        <p>年度净利润：${yearProfit.toFixed(2)}</p>
-        <p>年度利润率：${yearMargin}%</p>
+        <p>年度净利：${yearProfit.toFixed(2)}</p>
+        <p>利润率：${yearMargin}%</p>
     </div>
 </div>
-
-<h4>月度收支概览</h4>
+<h4>支出结构</h4>
 <table class="report-table">
-<tr><th>月份</th><th>收入</th><th>支出</th><th>净利</th><th>利润率</th></tr>`;
+<tr><th>大类</th><th>金额</th><th>占比</th><th>明细</th></tr>`;
 
-    months.forEach(m => {
-        const d = monthMap[m];
-        html += `<tr>
-<td>${m}</td>
-<td>${d.income.toFixed(0)}</td>
-<td>${d.expense.toFixed(0)}</td>
-<td>${d.profit.toFixed(0)}</td>
-<td>${d.margin.toFixed(1)}%</td>
-</tr>`;
-    });
-
-    html += `</table><h4>年度支出结构</h4>
-<table class="report-table">
-<tr><th>支出大类</th><th>金额</th><th>占总支出比</th></tr>`;
-
-    mainCategories.forEach(c => {
+    mainCategories.forEach(c=>{
         const v = yearCat[c];
         const p = yearExpense>0 ? (v/yearExpense*100).toFixed(1) : 0;
-        let dataStr = JSON.stringify(yearSubCat[c]).replace(/"/g, '&quot;');
-        html += `<tr>
-<td>${c}<button class="detail-btn" onclick="showDetailModal('${c}', '${dataStr}')">明细</button></td>
+        html+=`<tr>
+<td>${c}</td>
 <td>${v.toFixed(2)}</td>
 <td>${p}%</td>
+<td><button class="detail-btn" onclick="showYearCategoryDetail('${y}','${c}')">查看流水</button></td>
 </tr>`;
     });
 
-    html += `</table>
-<div class="chart-box"><h4>年度支出饼图</h4><canvas id="yearPieChart"></canvas></div>`;
+    html+=`</table>
+<div class="chart-box"><canvas id="yearPieChart"></canvas></div>`;
 
-    document.getElementById("reportTitle").innerText = y + "年度财报";
+    document.getElementById("reportTitle").innerText = y+"年度财报";
     document.getElementById("reportContent").innerHTML = html;
     document.getElementById("reportModal").style.display = "block";
 
-    setTimeout(() => {
-        const labels = [], values = [];
-        const colors = ["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"];
-        mainCategories.forEach((c,i) => { labels.push(c); values.push(yearCat[c]); });
-        new Chart(document.getElementById("yearPieChart").getContext("2d"), {
+    setTimeout(()=>{
+        const labels=[],values=[];
+        const colors=["#ff6384","#36a2eb","#4bc0c0","#ffce56","#9966ff","#ff9f40","#c0c0c0","#78c2ad","#6cc3d5"];
+        mainCategories.forEach((c,i)=>{labels.push(c);values.push(yearCat[c])});
+        new Chart(document.getElementById("yearPieChart").getContext("2d"),{
             type:"pie",
             data:{labels,datasets:[{data:values,backgroundColor:colors}]},
             options:{plugins:{legend:{position:"right"}}}
         });
-    }, 100);
+    },100);
 }
 
-// 修复明细弹窗
-function showDetailModal(category, dataStr) {
-    const sub = JSON.parse(dataStr);
-    const total = Object.values(sub).reduce((s, n) => s + n, 0);
-    let html = `<h4>${category} · 小类明细</h4>
-<table class="report-table">
-<tr><th>小类</th><th>金额</th><th>占本大类比例</th></tr>`;
-
-    Object.entries(sub).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
-        const p = total>0 ? (v/total*100).toFixed(1) : 0;
-        html += `<tr><td>${k}</td><td>${v.toFixed(2)}</td><td>${p}%</td></tr>`;
+// 年报大类 → 打开真实流水明细
+function showYearCategoryDetail(year, mainCat){
+    const list = records.filter(r=>{
+        if(r.type!=="支出") return false;
+        const by = r.belongMonth ? r.belongMonth.substring(0,4) : "";
+        if(by!==year && !r.date.startsWith(year+"-")) return false;
+        const [mc] = (r.category||"").split("-");
+        return mc === mainCat;
     });
 
-    html += `</table>`;
-    document.getElementById("detailTitle").innerText = category + " 明细";
+    let total = 0;
+    let html = `<h4>${year}年 · ${mainCat} 明细流水</h4>
+<table class="report-table">
+<tr><th>日期</th><th>归属月</th><th>小类</th><th>账户</th><th>金额</th><th>备注</th></tr>`;
+
+    list.sort((a,b)=>a.date.localeCompare(b.date)).forEach(r=>{
+        const [mc,sc] = (r.category||"-").split("-");
+        total += r.amount;
+        html+=`<tr>
+<td>${r.date}</td>
+<td>${r.belongMonth||""}</td>
+<td>${sc||"-"}</td>
+<td>${r.channel}</td>
+<td>${r.amount.toFixed(2)}</td>
+<td>${r.remark||""}</td>
+</tr>`;
+    });
+
+    html+=`<tr style="font-weight:bold">
+<td colspan="4">合计</td>
+<td>${total.toFixed(2)}</td>
+<td></td>
+</tr></table>`;
+
+    document.getElementById("detailTitle").innerText = `${year} ${mainCat} 明细`;
     document.getElementById("detailContent").innerHTML = html;
     document.getElementById("detailModal").style.display = "block";
 }
 
 function closeDetailModal(){
-    document.getElementById("detailModal").style.display = "none";
+    document.getElementById("detailModal").style.display="none";
 }
-
 function closeReport(){
-    document.getElementById("reportModal").style.display = "none";
+    document.getElementById("reportModal").style.display="none";
 }
 
-// 支出分类说明完整还原
 function showCategoryGuide(){
   document.getElementById("categoryContent").innerHTML = `
 <strong>一、人事支出</strong><br>
@@ -668,13 +701,11 @@ function showCategoryGuide(){
 培训：员工内训、外训、学习资料<br>
 招聘：招聘平台费用、猎头费、面试成本<br>
 其他-福利/补贴：餐补、交通补贴、节日福利等<br><br>
-
 <strong>二、市场支出</strong><br>
 网络：线上推广、信息流、短视频广告<br>
 渠道：合作渠道佣金、渠道返点<br>
 地推：线下推广、传单、活动执行<br>
 物资制作：宣传物料、海报、展板制作<br><br>
-
 <strong>三、行政支出</strong><br>
 物资-耐用办公品：电脑、桌椅、家具等<br>
 物资-办公耗材：纸张、笔墨、打印耗材等<br>
@@ -682,30 +713,24 @@ function showCategoryGuide(){
 其他-通讯费用：电话、网络套餐费用<br>
 后勤费用：饮水、清洁、物业相关<br>
 其他-服务费用：第三方服务、杂项服务费<br><br>
-
 <strong>四、管理支出</strong><br>
 管理费：公司整体运营管理费用<br>
 独立采购及教学活动：教学相关采购、活动支出<br>
 教研相关：教材研发、课件制作、教具采购<br>
 小程序相关：小程序开发、维护、服务费<br><br>
-
 <strong>五、场地支出</strong><br>
 场地租金：办公室、教室租金<br>
 后勤费用：场地水电、物业<br>
 场地修缮：装修、维修、改造费用<br><br>
-
 <strong>六、财务支出</strong><br>
 各项税费：增值税、所得税、附加税等<br>
 退费支出：学员退费、客户退款<br><br>
-
 <strong>七、开业筹备支出</strong><br>
 场地：前期选址、定金、装修<br>
 物资：开业所需家具、设备<br>
 其他：证照、杂项筹备费用<br><br>
-
 <strong>八、预付款</strong><br>
 场地：预付租金、装修预付款等<br><br>
-
 <strong>九、其他支出</strong><br>
 无分类：无法归入以上类别的杂项支出
   `;
@@ -746,6 +771,7 @@ async function importExcel(e){
                 operator:currentUser,operateTime:new Date().toLocaleString()
             });
         });
+        filteredRecords = [...records];
         await saveData({records,residualValue,initialBalance});
         refreshAll();
         alert("导入完成");
